@@ -1,0 +1,194 @@
+========================================================================
+  CollegeGene Navigator — QUICK START
+========================================================================
+
+------------------------------------------------------------------------
+STEP 0 — Check Node.js (one-time)
+------------------------------------------------------------------------
+Open a terminal and run:
+
+    node --version
+
+You need v22.5.0 or higher (e.g. v22.22.2).
+- If you see a version >= 22.5  -> you're good, continue.
+- If "command not found" or a lower number -> install the LTS version
+  from https://nodejs.org , then re-check.
+
+
+------------------------------------------------------------------------
+STEP 1 — Open a terminal IN the project folder
+------------------------------------------------------------------------
+Unzip the download, then in your terminal "cd" into the folder that
+contains this file. It should contain: server/  client/  README.md
+
+    cd path/to/collegegene-ai
+
+(Tip: on macOS you can type "cd " then drag the folder into the terminal.)
+
+
+------------------------------------------------------------------------
+STEP 2 — Run these four commands, one at a time
+------------------------------------------------------------------------
+    npm run install:all
+    npm run import
+    npm run build:client
+    npm run start
+
+What each does:
+  install:all    downloads the libraries (takes ~30-60 sec, one time)
+  import         loads the 28 verified colleges + careers into the DB
+  build:client   compiles the web interface (one time, and after code changes)
+  start          starts the app
+
+
+------------------------------------------------------------------------
+STEP 3 — Open the app
+------------------------------------------------------------------------
+When the terminal says "CollegeGene server on http://localhost:4000",
+open that address in your browser:
+
+    http://localhost:4000
+
+That's it. Enter the student profile and explore.
+
+
+------------------------------------------------------------------------
+USING IT AGAIN LATER
+------------------------------------------------------------------------
+You only need STEP 2 the first time. After that, to use it again just:
+
+    npm run start
+
+...then open http://localhost:4000 again.
+(Re-run "npm run build:client" only if the code changes.)
+
+To STOP the app: press  Ctrl + C  in the terminal.
+
+
+------------------------------------------------------------------------
+OPTIONAL — Your own free API key (recommended, ~1 minute)
+------------------------------------------------------------------------
+The app works immediately with a shared demo key, but it's rate-limited.
+For smoother use, get your own free key:
+
+  1. Go to  https://api.data.gov/signup/  and sign up (instant).
+  2. In the "server" folder, copy ".env.example" to ".env"
+  3. Open ".env" and paste your key after COLLEGE_SCORECARD_API_KEY=
+  4. Save, then restart with  npm run start
+
+Your key stays on your computer and is never sent to the browser.
+
+
+------------------------------------------------------------------------
+OPTIONAL — Free Gemini key (turns ON document reading)
+------------------------------------------------------------------------
+This is what lets the app READ your transcript / resume / portfolio and
+auto-build your profile (GPA, scores, activities, awards, projects), which
+then feeds your admission chances.
+
+Without this key, uploads still work — the app stores your files and shows
+their text, but you fill in the fields yourself. Add the key to get the
+"Build profile from documents" auto-fill.
+
+  1. Go to  https://aistudio.google.com/apikey
+  2. Sign in with a Google account and click "Create API key".
+     (Free. No credit card needed.)
+  3. Copy the key (it starts with "AIza...").
+  4. In the "server" folder, open the ".env" file
+     (if you don't have one yet, copy ".env.example" to ".env" first).
+  5. Add these two lines (paste your key after the = sign):
+
+         GEMINI_API_KEY=AIza_your_key_here
+         GEMINI_MODEL=gemini-2.5-flash
+
+  6. Save the file, then restart the app:  npm run start
+
+To confirm it worked: the terminal startup line should now show
+   gemini: 'configured (gemini-2.5-flash)'
+instead of "not set". In the app, the Profile screen's document section
+will show a "Build profile from documents" button you can use.
+
+PRIVACY NOTE (read this):
+When you use the auto-read/auto-fill, the TEXT from your documents is sent
+to Google's Gemini service. On Google's FREE tier, Google may use those
+inputs to improve their models. For a real student's transcript, decide if
+you're comfortable with that. If not, leave the key out and enter fields
+manually — everything else in the app still works. (A paid Gemini tier turns
+off that data-use, if you ever want the stronger privacy guarantee.)
+
+If the model name ever stops working (Google sometimes retires model names),
+just change GEMINI_MODEL in .env to a current one (e.g. gemini-2.5-flash)
+and restart — no code changes needed.
+
+
+------------------------------------------------------------------------
+IF SOMETHING BREAKS
+------------------------------------------------------------------------
+* "node: command not found" or version < 22.5
+    -> Install Node LTS from https://nodejs.org and reopen the terminal.
+
+* "npm run install:all" errors
+    -> Make sure you're in the collegegene-ai folder (STEP 1). You should
+       see server/ and client/ when you run:  ls   (mac/linux)  or  dir  (windows)
+
+* Port 4000 already in use
+    -> Something else is using it. Set a different port for one run:
+         mac/linux:   PORT=4100 npm run start
+         windows:     set PORT=4100 && npm run start
+       Then open http://localhost:4100
+
+* College pages say "Unable to retrieve official data"
+    -> Usually the shared demo key hit its hourly limit, OR no internet.
+       Wait a bit, or add your own free key (see the section above).
+
+* The page is blank
+    -> Make sure you ran "npm run build:client" before "npm run start".
+
+* "Build profile" says it needs a key, or auto-fill does nothing
+    -> That feature needs the free Gemini key. See the Gemini section above.
+       Without it, upload still works; enter fields manually.
+
+* Gemini says "API error" or model not found
+    -> Your key may be wrong, or the model name changed. Check GEMINI_API_KEY
+       in .env, and try GEMINI_MODEL=gemini-2.5-flash , then restart.
+
+* Portfolio link "couldn't read much text"
+    -> Some sites are app-only or image-heavy with little readable text.
+       The link is still saved; the app just can't extract much from it.
+
+
+------------------------------------------------------------------------
+WHERE YOUR DATA LIVES
+------------------------------------------------------------------------
+Your profile, saved college list, and application tracker are saved in a
+database file inside the "server" folder (collegegene.db) — on your own
+computer. Nothing leaves your machine when running locally.
+
+
+------------------------------------------------------------------------
+NEXT: PUTTING IT ONLINE (Railway) — when you're ready
+------------------------------------------------------------------------
+Once it works locally, deploying to Railway makes it reachable from your
+phone or any computer. The short version:
+
+  1. Push the collegegene-ai folder to a GitHub repo.
+     (The included .gitignore already prevents committing your .env key.)
+  2. On railway.app, create a new project -> "Deploy from GitHub repo".
+  3. Set the commands:
+       Build:  npm run install:all && npm run build:client
+       Start:  npm run start
+  4. Add an environment variable:  COLLEGE_SCORECARD_API_KEY = your key
+  5. IMPORTANT — add a persistent Volume so your saved data survives
+     restarts:
+       - Attach a Volume, mount it at:  /data
+       - Add an environment variable:   DB_PATH = /data/collegegene.db
+  6. Run the one-time data import (Railway shell, or add it to the build):
+       npm run import
+  7. Railway gives you a public URL — open it from anywhere.
+
+Note: there is no login, so treat that URL as private (it's set up for
+one student / one family). Multiple independent students would require
+adding user accounts first.
+
+Full details are in README.md ("Deploy" section).
+========================================================================

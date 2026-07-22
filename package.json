@@ -1,0 +1,18 @@
+{
+  "name": "collegegene-navigator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CollegeGene Navigator — live-data college, major, career, and admissions planning for high school students. Official data from College Scorecard + BLS, key-safe backend, verified-data overrides.",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "import": "cd server && npm run import:verified",
+    "build:client": "cd client && npm run build",
+    "build": "npm run install:all && npm run build:client",
+    "start": "cd server && npm start",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev"
+  },
+  "engines": {
+    "node": ">=22 <25"
+  }
+}

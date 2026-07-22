@@ -1,0 +1,181 @@
+// coursePlans.js — seed data for the Course & Preparation Plan (Decision Plan
+// tab). This is general, evidence-based curriculum/prep guidance (the kind any
+// high school counselor or department website would describe), NOT a claim
+// about what any specific college requires or offers. It is intentionally
+// generic and reused across every family — see database.js for why this table
+// is not keyed by student_id. Track ids/names are reused from the app's
+// existing Career Track scenarios (services/scenarios.js) so the language here
+// stays consistent with what Matches/Advisor already tell the family; we do
+// not introduce a second, conflicting taxonomy.
+export const COURSE_PLANS = [
+  {
+    trackId: "cs_ai_ds",
+    trackName: "CS + AI / Data Science",
+    seniorYearCourses: "AP Calculus BC (or continue past AB), AP Statistics, AP Computer Science A, a programming elective beyond the AP-CS curriculum if offered (data structures, ML/AI intro).",
+    collegeEarlyDirection: "Intro CS sequence (usually a Python/Java-based CS1/CS2), discrete math, linear algebra, and a first statistics/probability course in year one; data structures & algorithms plus an intro ML or AI course by sophomore year.",
+    mathExpectations: "Comfortable through calculus; linear algebra and probability/statistics are core to AI/ML and should not be delayed.",
+    domainExpectations: "Python fluency, familiarity with at least one ML framework (e.g. scikit-learn/PyTorch), understanding of data structures & algorithms, and basic data pipeline/ETL concepts.",
+    suggestedProjects: "End-to-end ML model (collect, clean, train, present); a data pipeline or dashboard built on a public dataset.",
+    suggestedSkills: "Python & ML frameworks; linear algebra, probability & statistics; data pipelines; a research or applied ML project.",
+    risksIfWeak: "Fast-moving tooling — fundamentals (math, algorithms) outlast frameworks. Weak math prep is the most common reason students struggle in intro ML/AI coursework.",
+  },
+  {
+    trackId: "cs_finance_quant",
+    trackName: "CS + Finance / FinTech / Quant",
+    seniorYearCourses: "AP Calculus BC, AP Statistics, AP Microeconomics/Macroeconomics, AP Computer Science A.",
+    collegeEarlyDirection: "Calculus sequence through multivariable, linear algebra, intro micro/macro economics, and an intro programming course (Python preferred) in year one; probability theory and an intro finance or financial-math course by sophomore year.",
+    mathExpectations: "Calculus (through multivariable ideally), linear algebra, and probability are foundational for quantitative finance; weak math prep is a common bottleneck.",
+    domainExpectations: "Python for data/quant work, spreadsheet/financial modeling, economics fundamentals, and (later) optimization and stochastic processes.",
+    suggestedProjects: "A finance-related data/modeling artifact (e.g. a backtested trading-signal notebook, a valuation model, or an economics research project with real data).",
+    suggestedSkills: "Calculus, linear algebra, probability; Python; economics/finance fundamentals; optimization.",
+    risksIfWeak: "Weak calculus/statistics preparation makes quant-finance coursework (stochastic calculus, econometrics) disproportionately harder later.",
+  },
+  {
+    trackId: "cs_math_or",
+    trackName: "CS + Math / Statistics / Operations Research",
+    seniorYearCourses: "AP Calculus BC, AP Statistics, AP Computer Science A, a discrete math or linear algebra elective if available.",
+    collegeEarlyDirection: "Proof-based math sequence (real analysis or discrete math), linear algebra, and CS1/CS2 in year one; optimization/operations research and probability by sophomore year.",
+    mathExpectations: "Strong, proof-comfortable math background; multivariable calculus and linear algebra expected early.",
+    domainExpectations: "Algorithmic thinking, optimization modeling (LP/IP), and statistical inference.",
+    suggestedProjects: "An optimization or operations-research case study (e.g. scheduling, routing, or resource-allocation model) with real or public data.",
+    suggestedSkills: "Proof-based math, linear algebra, optimization, statistical inference, algorithms.",
+    risksIfWeak: "Programs that are proof-heavy can be a hard transition for students without prior exposure to formal proof-writing.",
+  },
+  {
+    trackId: "eecs_ai_systems",
+    trackName: "Electrical Engineering / Computer Engineering + AI Systems",
+    seniorYearCourses: "AP Physics C (Mechanics and, if available, Electricity & Magnetism), AP Calculus BC, AP Computer Science A.",
+    collegeEarlyDirection: "Physics C-based circuits/electronics sequence, calculus through multivariable and differential equations, and an intro programming/embedded-systems course in year one; digital logic and computer architecture by sophomore year.",
+    mathExpectations: "Calculus through differential equations; linear algebra strongly recommended before signal-processing or ML coursework.",
+    domainExpectations: "Circuits & electronics, embedded systems (C/C++), digital logic, and increasingly, applied ML on embedded/edge hardware.",
+    suggestedProjects: "An embedded systems or robotics build (microcontroller-based project) that pairs hardware with software.",
+    suggestedSkills: "Physics C, circuits/electronics, embedded systems, robotics, C++/Python.",
+    risksIfWeak: "Without Physics C (E&M) or equivalent exposure, the circuits sequence can be a steep first-year adjustment.",
+  },
+  {
+    trackId: "cs_cyber_security",
+    trackName: "CS + Cybersecurity / AI Security",
+    seniorYearCourses: "AP Computer Science A, AP Calculus (AB or BC), a networking or cybersecurity elective if the high school offers one.",
+    collegeEarlyDirection: "CS1/CS2, discrete math, and an intro networks or systems course in year one; a dedicated intro cybersecurity/security-fundamentals course by sophomore year (note: many colleges offer cybersecurity as a concentration, minor, or certificate rather than a standalone major — verify exactly how a given school structures it).",
+    mathExpectations: "Discrete math and probability; calculus is generally supportive rather than central for a security-focused path.",
+    domainExpectations: "Networking fundamentals, operating systems, cryptography basics, and secure-coding practice.",
+    suggestedProjects: "A security-focused build (e.g. a CTF write-up portfolio, a small penetration-testing lab report, or a secure-coding project).",
+    suggestedSkills: "Networking, operating systems, cryptography fundamentals, secure coding.",
+    risksIfWeak: "Cybersecurity program structure varies widely by school (major vs. concentration vs. certificate) — confirm the exact structure before assuming a standalone major exists.",
+  },
+  {
+    trackId: "quantum_physics_eecs",
+    trackName: "Quantum / Applied Physics / EECS Research Track",
+    seniorYearCourses: "AP Physics C (Mechanics and E&M), AP Calculus BC, and additional math (multivariable/linear algebra) if dual-enrollment or AP options exist.",
+    collegeEarlyDirection: "Multivariable calculus, linear algebra, and Physics C-level mechanics/E&M in year one; intro modern/quantum physics and a computational or simulation methods course by sophomore year.",
+    mathExpectations: "Multivariable calculus and linear algebra are foundational; differential equations and complex analysis follow closely.",
+    domainExpectations: "Applied math, simulation/numerical methods, and (where available) an undergraduate research placement in a physics or applied-physics lab.",
+    suggestedProjects: "A simulation or applied-research project (e.g. a computational physics model) — ideally connected to a lab or research mentor.",
+    suggestedSkills: "Multivariable calculus, linear algebra, Physics C, applied math, simulation/research project experience.",
+    risksIfWeak: "Quantum/applied-physics research tracks lean heavily on math maturity; gaps in calculus or linear algebra compound quickly.",
+  },
+  {
+    trackId: "aerospace_ai_autonomy",
+    trackName: "Aerospace Engineering + AI / Autonomy",
+    seniorYearCourses: "AP Physics C (Mechanics), AP Calculus BC, AP Computer Science A if available.",
+    collegeEarlyDirection: "Statics/dynamics, calculus through differential equations, and an intro programming course in year one; controls, aerodynamics, and an autonomy/robotics elective by sophomore/junior year.",
+    mathExpectations: "Calculus through differential equations; linear algebra needed for controls and autonomy coursework.",
+    domainExpectations: "Statics/dynamics, aerodynamics fundamentals, controls, and increasingly, autonomy/AI for flight or robotic systems.",
+    suggestedProjects: "A controls or autonomy-related build (e.g. a drone/robotics project, or a simulation of a guidance/control system).",
+    suggestedSkills: "Physics C mechanics, calculus/differential equations, programming, controls fundamentals.",
+    risksIfWeak: "Aerospace curricula are calculus- and physics-intensive from year one; weak mechanics prep is a common early obstacle.",
+  },
+  {
+    trackId: "mech_robotics_ai",
+    trackName: "Mechanical Engineering / Robotics + AI Systems",
+    seniorYearCourses: "AP Physics C (Mechanics), AP Calculus BC, AP Computer Science A or a robotics/engineering elective.",
+    collegeEarlyDirection: "Statics, calculus through differential equations, and an intro programming/CAD course in year one; dynamics, controls, and a robotics or mechatronics elective by sophomore year.",
+    mathExpectations: "Calculus through differential equations; linear algebra supports controls and robotics coursework.",
+    domainExpectations: "Mechanics (statics/dynamics), CAD, controls, and programming for robotics/mechatronics.",
+    suggestedProjects: "A robotics build (e.g. a FIRST Robotics-style project, a CAD-designed mechanism, or a controls simulation).",
+    suggestedSkills: "Physics C mechanics, CAD, controls, programming (Python/C++).",
+    risksIfWeak: "Hands-on robotics experience (even informal) meaningfully de-risks the transition into project-based ME/robotics coursework.",
+  },
+  {
+    trackId: "industrial_or_ai",
+    trackName: "Industrial Engineering / Operations Research + AI Optimization",
+    seniorYearCourses: "AP Calculus BC, AP Statistics, AP Computer Science A if available.",
+    collegeEarlyDirection: "Calculus through multivariable, linear algebra, and probability/statistics in year one; an intro optimization or operations-research course by sophomore year.",
+    mathExpectations: "Linear algebra and probability/statistics are central; calculus supports optimization coursework.",
+    domainExpectations: "Optimization modeling, statistics, and increasingly, applied ML for scheduling/logistics/optimization problems.",
+    suggestedProjects: "An optimization case study (e.g. scheduling, supply-chain, or resource-allocation model) with real or public data.",
+    suggestedSkills: "Linear algebra, probability/statistics, optimization modeling, spreadsheet/programming tools.",
+    risksIfWeak: "Weak statistics/probability preparation makes the transition into stochastic and optimization coursework harder.",
+  },
+  {
+    trackId: "chemical_ai_energy_materials",
+    trackName: "Chemical Engineering + AI / Energy / Materials",
+    seniorYearCourses: "AP Chemistry, AP Calculus BC, AP Physics (Mechanics) if available.",
+    collegeEarlyDirection: "General chemistry, calculus through differential equations, and physics in year one; thermodynamics and a materials or process-engineering elective by sophomore year.",
+    mathExpectations: "Calculus through differential equations; comfort with chemistry-heavy quantitative reasoning.",
+    domainExpectations: "Thermodynamics, materials fundamentals, process/energy systems, and (where available) applied ML for materials or process optimization.",
+    suggestedProjects: "A materials or energy-systems investigation (e.g. a lab-based project or a data analysis of an energy dataset).",
+    suggestedSkills: "Chemistry fundamentals, calculus/differential equations, thermodynamics basics.",
+    risksIfWeak: "Weak chemistry or calculus preparation is the most common early obstacle in chemical engineering programs.",
+  },
+  {
+    trackId: "biomedical_health_ai",
+    trackName: "Biomedical Engineering + Health AI",
+    seniorYearCourses: "AP Biology, AP Chemistry or Physics, AP Calculus (AB or BC), AP Computer Science A if available.",
+    collegeEarlyDirection: "Biology/physiology, calculus, and an intro engineering or programming course in year one; biomechanics/bioinstrumentation and an intro health-data or ML course by sophomore year.",
+    mathExpectations: "Calculus through differential equations; statistics needed for health-data and clinical-research coursework.",
+    domainExpectations: "Human biology/physiology, instrumentation/signals basics, and increasingly, health-data analytics/ML.",
+    suggestedProjects: "A biomedical-data or device-related project (e.g. analyzing a public health dataset or building a simple biosignal-processing demo).",
+    suggestedSkills: "Biology fundamentals, calculus, statistics, programming.",
+    risksIfWeak: "Biomedical engineering blends biology and engineering rigor — students weak in either often struggle more than in a single-discipline major.",
+  },
+  {
+    trackId: "materials_semiconductor_energy",
+    trackName: "Materials / Semiconductor / Energy Systems",
+    seniorYearCourses: "AP Chemistry, AP Physics (Mechanics and/or E&M), AP Calculus BC.",
+    collegeEarlyDirection: "Chemistry and physics fundamentals, calculus through differential equations, and an intro materials-science course in year one; solid-state/semiconductor physics and an energy-systems elective by sophomore/junior year.",
+    mathExpectations: "Calculus through differential equations; physics-heavy quantitative reasoning.",
+    domainExpectations: "Materials science fundamentals, solid-state/semiconductor physics, and energy-systems basics.",
+    suggestedProjects: "A materials characterization or energy-systems data project (lab-based or data-analysis based).",
+    suggestedSkills: "Chemistry and physics fundamentals, calculus, lab technique.",
+    risksIfWeak: "This is a smaller, specialized field at many schools — confirm the exact program structure (major vs. concentration) before assuming standalone availability.",
+  },
+  {
+    trackId: "environmental_energy_systems",
+    trackName: "Environmental / Energy Systems Engineering",
+    seniorYearCourses: "AP Environmental Science, AP Chemistry or Physics, AP Calculus (AB or BC).",
+    collegeEarlyDirection: "Chemistry/environmental science fundamentals, calculus, and an intro engineering course in year one; fluid mechanics/thermodynamics and an energy-systems elective by sophomore year.",
+    mathExpectations: "Calculus through differential equations; statistics useful for environmental data analysis.",
+    domainExpectations: "Environmental science fundamentals, thermodynamics/fluid mechanics, and energy-systems basics.",
+    suggestedProjects: "An environmental or energy-systems data project (e.g. analyzing public environmental/energy datasets).",
+    suggestedSkills: "Chemistry/environmental science fundamentals, calculus, data analysis.",
+    risksIfWeak: "Program naming varies widely (environmental engineering vs. environmental science vs. energy engineering) — verify which one a school actually offers.",
+  },
+  {
+    trackId: "business_data_leadership",
+    trackName: "Business / Data / Leadership",
+    seniorYearCourses: "AP Statistics, AP Microeconomics/Macroeconomics, AP Calculus (AB or BC), and a business/leadership elective if offered.",
+    collegeEarlyDirection: "Intro micro/macro economics, statistics, and a business-analytics or spreadsheet-modeling course in year one; a leadership/cohort program (if the school offers one — verify officially) alongside core business coursework.",
+    mathExpectations: "Statistics is central; calculus supports economics and quantitative business coursework.",
+    domainExpectations: "Business analytics, economics fundamentals, spreadsheet/financial modeling, and communication/leadership skills.",
+    suggestedProjects: "A business-analytics project (e.g. a market or operations analysis using public data) or a documented leadership initiative.",
+    suggestedSkills: "Statistics, economics, business analytics, leadership, communication, spreadsheet/modeling skills.",
+    risksIfWeak: "Many strong business programs (e.g. cohort/direct-admit business programs) have separate, often more selective, admission processes — verify this is not assumed the same as general-university admission.",
+  },
+];
+
+export function seedCoursePlans(db) {
+  const ts = Date.now();
+  const stmt = db.prepare(`
+    INSERT INTO course_plans (track_id, track_name, senior_year_courses, college_early_course_direction,
+      math_expectations, domain_expectations, suggested_projects, suggested_skills, risks_if_weak_prep, updated_at)
+    VALUES (@trackId, @trackName, @seniorYearCourses, @collegeEarlyDirection, @mathExpectations,
+      @domainExpectations, @suggestedProjects, @suggestedSkills, @risksIfWeak, @updated_at)
+    ON CONFLICT(track_id) DO UPDATE SET track_name=excluded.track_name,
+      senior_year_courses=excluded.senior_year_courses, college_early_course_direction=excluded.college_early_course_direction,
+      math_expectations=excluded.math_expectations, domain_expectations=excluded.domain_expectations,
+      suggested_projects=excluded.suggested_projects, suggested_skills=excluded.suggested_skills,
+      risks_if_weak_prep=excluded.risks_if_weak_prep, updated_at=excluded.updated_at
+  `);
+  for (const plan of COURSE_PLANS) stmt.run({ ...plan, updated_at: ts });
+}
