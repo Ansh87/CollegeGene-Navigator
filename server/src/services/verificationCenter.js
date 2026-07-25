@@ -13,6 +13,7 @@
 // listed as "not covered yet" in the response rather than shown as fake rows.
 import { db } from "../db/database.js";
 import { detectConflicts } from "./applicationTimeline.js";
+import { DOUBLE_MAJOR_VERIFIED_STATUSES } from "./selectionContext.js";
 
 export const VERIFICATION_ITEM_STATUSES = [
   "Verified", "Needs verification", "Conflicting sources", "Missing source", "User verified", "Not applicable",
@@ -160,6 +161,29 @@ export function buildVerificationCenter(studentId) {
           actionNeeded: "Confirm eligibility for any special/honors program on the official page.",
           priority: "Low", relatedPage: "decision-plan" });
       }
+    }
+
+    // -- Double-major rules needing verification, specifically for colleges
+    // selected from Double Major Search (student_college_list.primary_major /
+    // decision_plan_items.primary_major). This is separate from the generic
+    // checklist-based item above: it fires whenever the app actually has a
+    // primary+secondary major pairing on file for this college and that
+    // pairing's own double_major_verification_status isn't yet an official/
+    // user-verified status -- i.e. exactly what Double Major Search produces.
+    const listRow = c.collegeId
+      ? db.prepare("SELECT primary_major, secondary_major, double_major_status, double_major_verification_status FROM student_college_list WHERE student_id=? AND college_id=?").get(studentId, c.collegeId)
+      : null;
+    const planRow = c.itemId
+      ? db.prepare("SELECT primary_major, secondary_major, double_major_status, double_major_verification_status FROM decision_plan_items WHERE student_id=? AND item_id=?").get(studentId, c.itemId)
+      : null;
+    const dm = (planRow && planRow.primary_major) ? planRow : listRow;
+    if (dm && dm.primary_major && dm.secondary_major && !DOUBLE_MAJOR_VERIFIED_STATUSES.includes(dm.double_major_verification_status)) {
+      addItem({
+        college: label, collegeId: c.collegeId, programOrTrack: `${dm.primary_major} + ${dm.secondary_major}`,
+        issueType: "Double-major rules needing verification", status: "Needs verification",
+        actionNeeded: `Verify double-major rules for ${label} -- confirm the ${dm.primary_major} + ${dm.secondary_major} pairing is actually allowed, any school-to-school restrictions, and direct-admit requirements with the college's official source.`,
+        priority: "High", relatedPage: "programs",
+      });
     }
 
     // -- Cost / Net Price Calculator, sourced from decision_plan_items (only

@@ -538,8 +538,11 @@ collegesRouter.get("/major-combos", async (req, res) => {
     const major1 = (req.query.major1 || "").trim();
     const major2 = (req.query.major2 || "").trim() || null;
     const state = (req.query.state || "").trim() || null;
+    const control = (req.query.control || "").trim() || null;
+    const deep = String(req.query.deep || "").toLowerCase() === "true";
     if (!major1) return res.status(400).json({ error: "bad_request", message: "major1 required" });
-    const out = await searchMajorCombos({ major1, major2, state });
+    const out = await searchMajorCombos({ major1, major2, state, control, deep });
+    if (deep) out.deepSearchWarning = "Deep search may take longer. Results still need official verification.";
     res.json(out);
   } catch (err) { honestError(res, err); }
 });

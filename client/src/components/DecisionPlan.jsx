@@ -347,6 +347,16 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
                           {essayByCollege[it.item_id].actionNeeded && <strong style={{ color: "var(--amber)" }}> · {essayByCollege[it.item_id].actionNeeded}</strong>}
                         </div>
                       )}
+                      {it.primary_major && (
+                        <div className="note" style={{ fontSize: 11 }}>
+                          <span className="pill" style={{ background: "var(--target-b)" }}>Double Major</span>{" "}
+                          Primary: {it.primary_major} · Second major / minor: {it.secondary_major || "—"}
+                          {" · "}Status: {it.double_major_status || "Needs official verification"}
+                          {it.double_major_verification_status && !["Official source verified", "User verified"].includes(it.double_major_verification_status) && (
+                            <strong style={{ color: "var(--amber)" }}> · Verify double-major rules</strong>
+                          )}
+                        </div>
+                      )}
                       <div className="note" style={{ fontSize: 11, color: "var(--muted)" }}>
                         Application timeline: {timelineByCollege[it.college_id]?.timelineStatus || "Not started"}
                         {timelineByCollege[it.college_id]?.earliestUpcomingDeadline

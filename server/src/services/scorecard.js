@@ -581,31 +581,93 @@ export async function searchByMajor({ major, state = null, control = null, deep 
   return { ...result, cached: false, fetchedAt: Date.now() };
 }
 
-// Combination search: one or two majors.
-export async function searchMajorCombos({ major1, major2 = null, state = null }) {
-  const c1 = cipsForMajor(major1);
-  const u = new URL(config.scorecard.baseUrl);
-  u.searchParams.set("api_key", config.scorecard.apiKey);
-  u.searchParams.set("fields", "id,school.name,school.city,school.state,school.ownership,latest.admissions.admission_rate.overall,latest.programs.cip_4_digit");
-  u.searchParams.set("school.operating", "1");
-  if (state) u.searchParams.set("school.state", state);
-  if (c1.primary.length) {
-    u.searchParams.set("latest.programs.cip_4_digit.code", c1.primary.map(apiCip).join(","));
-    u.searchParams.set("latest.programs.cip_4_digit.credential.level", "3");
-    // Required here: without it Scorecard returns ONLY the nested items that
-    // matched major1, so major2 could never be verified. Page size is kept
-    // small because this response is large.
-    u.searchParams.set("all_programs_nested", "true");
+// Page through College Scorecard for the double-major candidate pool: colleges
+// whose bachelor's-level programs include major1's CIP codes, requesting the
+// FULL nested program list per record (all_programs_nested=true) so major2 can
+// also be checked against the same record without a second request. Mirrors
+// fetchMajorCandidatePool()'s resilient, throttled pagination pattern above —
+// a page failure stops the scan and returns what was already fetched
+// (partial:true) instead of failing the whole search.
+async function fetchComboCandidatePool({ cips1, state = null, control = null, poolLimit }) {
+  const perPage = 100;
+  const maxPages = Math.max(1, Math.ceil(poolLimit / perPage));
+  const all = [];
+  let page = 0, partial = false, total = null, lastErr = null;
+  while (page < maxPages && all.length < poolLimit) {
+    const u = new URL(config.scorecard.baseUrl);
+    u.searchParams.set("api_key", config.scorecard.apiKey);
+    u.searchParams.set("fields", "id,school.name,school.city,school.state,school.ownership,latest.admissions.admission_rate.overall,latest.programs.cip_4_digit");
+    u.searchParams.set("school.operating", "1");
+    u.searchParams.set("school.degrees_awarded.predominant", "3");
+    if (state) u.searchParams.set("school.state", state);
+    if (control === "public") u.searchParams.set("school.ownership", "1");
+    if (control === "private") u.searchParams.set("school.ownership", "2");
+    if (cips1.length) {
+      u.searchParams.set("latest.programs.cip_4_digit.code", cips1.map(apiCip).join(","));
+      u.searchParams.set("latest.programs.cip_4_digit.credential.level", "3");
+      // Required: without it Scorecard returns ONLY the nested items that matched
+      // major1, so major2 could never be checked against the same record.
+      u.searchParams.set("all_programs_nested", "true");
+    }
+    u.searchParams.set("sort", "latest.student.size:desc");
+    u.searchParams.set("per_page", String(perPage));
+    u.searchParams.set("page", String(page));
+    try {
+      const json = await fetchJson(u.toString());
+      const results = json.results || [];
+      all.push(...results);
+      total = json.metadata?.total ?? total;
+      page++;
+      const seen = page * perPage;
+      if (results.length < perPage || (total != null && seen >= total)) break;
+      await sleep(150); // slightly gentler throttle: all_programs_nested responses are larger
+    } catch (err) {
+      lastErr = err;
+      partial = true;
+      break;
+    }
   }
-  u.searchParams.set("sort", "latest.student.size:desc");
-  u.searchParams.set("per_page", "20");
-  const key = `combos:${major1.toLowerCase()}:${major2 ? major2.toLowerCase() : ""}:${state || "US"}`;
-  const { data } = await cachedFetch(key, u.toString());
-  const raws = data.results || [];
+  if (page >= maxPages && total != null && all.length < total) partial = true;
+  return { raws: all.slice(0, poolLimit), total, pagesFetched: page, partial, error: lastErr };
+}
 
+// Qualitative double-major evidence label -- NOT a numeric score, and NEVER a
+// claim that a college officially permits a double major (Scorecard cannot
+// confirm that; only the college itself can). Reflects only how solid the
+// underlying program-match evidence is for each field, using the SAME
+// matchType classification matchPrograms() already produces ("exact" vs
+// "related" CIP match). verificationStatus is always "Needs manual
+// verification" here because no official double-major-policy source has been
+// checked -- this is set once, honestly, not computed from a formula.
+function doubleMajorEvidenceStatus(m1, m2) {
+  const bothExact = m1[0]?.matchType === "exact" && m2[0]?.matchType === "exact";
+  return {
+    status: bothExact ? "Possible double-major fit" : "Weak / uncertain double-major fit",
+    verificationStatus: "Needs manual verification",
+  };
+}
+
+// Combination search: one or two majors. Scans a candidate pool (Standard: up
+// to 500 colleges; Deep: up to 2,000, opt-in only) instead of the previous
+// single page of ~20. Per-candidate match/filter logic is UNCHANGED — only how
+// many raw candidates it runs against, and the pool-limit/cache/mode metadata,
+// are new.
+export async function searchMajorCombos({ major1, major2 = null, state = null, control = null, deep = false }) {
+  const c1 = cipsForMajor(major1);
   const c2 = major2 ? cipsForMajor(major2) : null;
+  const mode = deep ? "deep" : "standard";
+  const poolLimit = deep ? MAJOR_SEARCH_DEEP_POOL : MAJOR_SEARCH_STANDARD_POOL;
+
+  const key = `combos:v2:${major1.toLowerCase()}:${major2 ? major2.toLowerCase() : ""}:${state || "US"}:${control || "any"}:${mode}`;
+  const cached = cacheGet(key);
+  const fresh = cached && Date.now() - cached.fetchedAt < MAJOR_SEARCH_CACHE_TTL_MS;
+  if (fresh) return { ...cached.data, cached: true, fetchedAt: cached.fetchedAt };
+
+  const pool = await fetchComboCandidatePool({ cips1: c1.primary, state, control, poolLimit });
+  if (!pool.raws.length && pool.error && !cached) throw pool.error;
+
   const colleges = [];
-  for (const raw of raws) {
+  for (const raw of pool.raws) {
     const programs = bachelorPrograms(raw);
     const m1 = matchPrograms(programs, c1.primary);
     if (!m1.length) continue;
@@ -613,6 +675,7 @@ export async function searchMajorCombos({ major1, major2 = null, state = null })
     if (major2) {
       const m2 = matchPrograms(programs, c2.primary);
       if (!m2.length) continue; // must offer BOTH
+      const evidence = doubleMajorEvidenceStatus(m1, m2);
       colleges.push({
         id: n.id, name: n.name, state: n.state, city: n.city,
         admissionRate: n.admissionRate,
@@ -620,6 +683,9 @@ export async function searchMajorCombos({ major1, major2 = null, state = null })
         matchingMajor1Programs: m1, matchingMajor2Programs: m2,
         possibleCombination: true,
         verifiedDoubleMajorPolicy: "unverified",
+        doubleMajorStatus: evidence.status,
+        doubleMajorVerificationStatus: evidence.verificationStatus,
+        doubleMajorLabel: `${major1} + ${major2}`,
         officialProgramSource: "College Scorecard",
         warning: "College Scorecard confirms field/program availability, not whether a formal double major is allowed. Confirm with the college's catalog/advising office.",
       });
@@ -635,13 +701,24 @@ export async function searchMajorCombos({ major1, major2 = null, state = null })
       });
     }
   }
-  return {
+  const result = {
     major1, major2,
     cipCodesUsed: { major1: c1.primary, major2: c2?.primary || null },
+    mode, // "standard" | "deep"
+    candidatePoolLimit: poolLimit,
+    candidatePoolScanned: pool.raws.length,
+    scoredCount: colleges.length,
+    partial: pool.partial,
+    scanTotalAvailable: pool.total,
     source: MAJOR_SOURCE,
     disclaimer: MAJOR_DISCLAIMER,
-    colleges: colleges.slice(0, 40),
+    colleges,
   };
+
+  if (colleges.length || pool.raws.length) cacheSet(key, result);
+  else if (cached) return { ...cached.data, cached: true, stale: true, fetchedAt: cached.fetchedAt };
+
+  return { ...result, cached: false, fetchedAt: Date.now() };
 }
 
 // Verify which of a set of colleges offer a bachelor's program in the given

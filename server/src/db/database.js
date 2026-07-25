@@ -516,6 +516,38 @@ addColumnIfMissing("essay_prompts", "source_label", "TEXT");
 addColumnIfMissing("essay_prompts", "source_type", "TEXT");
 addColumnIfMissing("essay_prompts", "prompt_status", "TEXT DEFAULT 'Unknown'");
 
+// Selection-context tracking on the saved list (My List): remembers WHERE a
+// college was selected from (Single Major Search, Double Major Search, Career
+// Track Search, Best Fit, Balanced List, or manually), plus double-major
+// context when relevant. A college can be selected from more than one place
+// -- selection_contexts_json holds the full accumulated set so re-adding the
+// same college from a new place merges into the existing row instead of
+// creating a confusing duplicate card. double_major_pathways_json holds every
+// distinct primary+secondary pairing considered for this college (e.g. CS+AI
+// AND CS+Finance), while the flat primary_major/secondary_major/... columns
+// mirror the most-recently-added pathway for simple display and CSV export.
+// See services/selectionContext.js for the merge logic and label constants.
+addColumnIfMissing("student_college_list", "selection_contexts_json", "TEXT");
+addColumnIfMissing("student_college_list", "source_context", "TEXT");
+addColumnIfMissing("student_college_list", "primary_major", "TEXT");
+addColumnIfMissing("student_college_list", "secondary_major", "TEXT");
+addColumnIfMissing("student_college_list", "double_major_label", "TEXT");
+addColumnIfMissing("student_college_list", "double_major_status", "TEXT");
+addColumnIfMissing("student_college_list", "double_major_verification_status", "TEXT");
+addColumnIfMissing("student_college_list", "double_major_notes", "TEXT");
+addColumnIfMissing("student_college_list", "double_major_pathways_json", "TEXT");
+addColumnIfMissing("student_college_list", "selected_at", "INTEGER");
+
+// Same double-major context on Decision Plan items, so a family working the
+// Final List Builder can see the primary/secondary majors and verification
+// status without flipping back to My List.
+addColumnIfMissing("decision_plan_items", "primary_major", "TEXT");
+addColumnIfMissing("decision_plan_items", "secondary_major", "TEXT");
+addColumnIfMissing("decision_plan_items", "double_major_status", "TEXT");
+addColumnIfMissing("decision_plan_items", "double_major_verification_status", "TEXT");
+addColumnIfMissing("decision_plan_items", "double_major_notes", "TEXT");
+addColumnIfMissing("decision_plan_items", "source_context", "TEXT");
+
 // --- One-time cleanup: earlier versions of the official-domain crawl (Layer 3
 // program discovery) had no quality gate and no de-duplication, so families
 // who ran "Research this college" before this fix may have site-furniture

@@ -51,12 +51,14 @@ decisionPlanRouter.post("/:id/items", (req, res) => {
       special_programs_json, career_track, admission_category, program_verification_status, admission_basis,
       major_risk, cost_risk, application_round, decision_status, action_needed, sticker_price, average_net_price,
       income_band_net_price, merit_aid_possibility, need_based_aid_strength, net_price_calculator_url,
-      npc_completed, estimated_family_cost, financial_safety, notes, created_at, updated_at)
+      npc_completed, estimated_family_cost, financial_safety, notes, created_at, updated_at,
+      primary_major, secondary_major, double_major_status, double_major_verification_status, double_major_notes, source_context)
     VALUES (@item_id, @student_id, @college_id, @college_name, @program_id, @program_name,
       @special_programs_json, @career_track, @admission_category, @program_verification_status, @admission_basis,
       @major_risk, @cost_risk, @application_round, @decision_status, @action_needed, @sticker_price, @average_net_price,
       @income_band_net_price, @merit_aid_possibility, @need_based_aid_strength, @net_price_calculator_url,
-      @npc_completed, @estimated_family_cost, @financial_safety, @notes, @created_at, @updated_at)
+      @npc_completed, @estimated_family_cost, @financial_safety, @notes, @created_at, @updated_at,
+      @primary_major, @secondary_major, @double_major_status, @double_major_verification_status, @double_major_notes, @source_context)
   `).run({
     item_id: itemId, student_id: req.params.id, college_id: b.collegeId || null, college_name: b.collegeName || null,
     program_id: b.programId || null, program_name: b.programName || null,
@@ -69,6 +71,9 @@ decisionPlanRouter.post("/:id/items", (req, res) => {
     net_price_calculator_url: b.netPriceCalculatorUrl || null, npc_completed: b.npcCompleted ? 1 : 0,
     estimated_family_cost: b.estimatedFamilyCost ?? null, financial_safety: b.financialSafety ? 1 : 0,
     notes: b.notes || null, created_at: ts, updated_at: ts,
+    primary_major: b.primaryMajor || null, secondary_major: b.secondaryMajor || null,
+    double_major_status: b.doubleMajorStatus || null, double_major_verification_status: b.doubleMajorVerificationStatus || null,
+    double_major_notes: b.doubleMajorNotes || null, source_context: b.sourceContext || null,
   });
   // Auto-create an empty verification checklist so the family always has one to fill in.
   db.prepare(`
@@ -88,6 +93,9 @@ const ITEM_FIELD_MAP = {
   averageNetPrice: "average_net_price", incomeBandNetPrice: "income_band_net_price", meritAidPossibility: "merit_aid_possibility",
   needBasedAidStrength: "need_based_aid_strength", netPriceCalculatorUrl: "net_price_calculator_url",
   estimatedFamilyCost: "estimated_family_cost", notes: "notes",
+  primaryMajor: "primary_major", secondaryMajor: "secondary_major", doubleMajorStatus: "double_major_status",
+  doubleMajorVerificationStatus: "double_major_verification_status", doubleMajorNotes: "double_major_notes",
+  sourceContext: "source_context",
 };
 const BOOL_FIELDS = { npcCompleted: "npc_completed", financialSafety: "financial_safety" };
 const JSON_FIELDS = { specialPrograms: "special_programs_json" };
@@ -462,6 +470,7 @@ decisionPlanRouter.get("/:id/export.csv", (req, res) => {
     "Application round", "Decision", "Application platform", "Application route deadline", "Essay count",
     "Essays not started", "Special/honors essays", "Essay prompt cycle/year(s)",
     "Application Timeline: earliest deadline", "Application Timeline: round", "Application Timeline: verification status",
+    "Source context", "Primary major", "Secondary major", "Double-major status", "Double-major verification status",
     "Action needed", "Notes", "Source URLs",
   ];
   const lines = [headers.join(",")];
@@ -482,6 +491,7 @@ decisionPlanRouter.get("/:id/export.csv", (req, res) => {
       pw?.platform_name || "Unknown -- needs verification", earliestDeadline,
       es?.total ?? 0, es?.notStarted ?? 0, es?.special ?? 0, es ? [...es.cycles].join("; ") : "",
       tl ? `${tl.event_label || tl.event_type}: ${tl.event_date}` : "", tl?.application_round || "", tl?.verification_status || "",
+      it.source_context, it.primary_major, it.secondary_major, it.double_major_status, it.double_major_verification_status,
       it.action_needed, it.notes, sourceUrls,
     ].map(csvEscape).join(","));
   }

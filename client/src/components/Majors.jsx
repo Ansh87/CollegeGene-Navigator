@@ -71,15 +71,16 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
     setMajorSearchError(null); setSearchSuccessMsg(null); setDisplayCount(20);
     try {
       const r = isCombo
-        ? await api.collegeMajorCombos(q, major2Query.trim(), stateFilter || undefined)
-        : await api.collegesByMajor(q, stateFilter || undefined, { deep: !isCombo && deepSearch });
+        ? await api.collegeMajorCombos(q, major2Query.trim(), stateFilter || undefined, { deep: deepSearch })
+        : await api.collegesByMajor(q, stateFilter || undefined, { deep: deepSearch });
       setMajorColleges(r.colleges || []);
       setSearchMeta({ ...r, combo: !!isCombo });
       const found = (r.colleges || []).length;
+      const pool = r.candidatePoolScanned ?? found;
       setSearchSuccessMsg(
         isCombo
-          ? `Found ${found} college${found === 1 ? "" : "s"} offering both fields.`
-          : `Scored ${r.candidatePoolScanned ?? found} candidate college${(r.candidatePoolScanned ?? found) === 1 ? "" : "s"} — found ${found} with a verified match.`
+          ? `Scored ${pool} candidate college${pool === 1 ? "" : "s"} — found ${found} offering both fields.`
+          : `Scored ${pool} candidate college${pool === 1 ? "" : "s"} — found ${found} with a verified match.`
       );
     } catch (err) {
       // An API failure is NOT the same as "no colleges matched".
@@ -205,23 +206,27 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
           ))}
         </div>
 
-        {!comboMode && (
-          <div style={{ marginTop: 10 }}>
-            <label className="row" style={{ gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
-              <input type="checkbox" checked={deepSearch} disabled={searchingMajor}
-                onChange={(e) => setDeepSearch(e.target.checked)} style={{ marginTop: 2 }} />
-              <span className="note" style={{ fontSize: 12 }}>
-                <strong>Deep search (advanced)</strong> — candidate pool searched, up to 2,000 colleges instead of 500.
-                <span style={{ display: "block", color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
-                  Deep search may take longer. Results still need official verification. Standard search (up to 500
-                  candidates) is enough for most searches.
-                </span>
+        <div style={{ marginTop: 10 }}>
+          <label className="row" style={{ gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+            <input type="checkbox" checked={deepSearch} disabled={searchingMajor}
+              onChange={(e) => setDeepSearch(e.target.checked)} style={{ marginTop: 2 }} />
+            <span className="note" style={{ fontSize: 12 }}>
+              <strong>Deep search (advanced)</strong> — candidate pool searched, up to 2,000 colleges instead of 500.
+              <span style={{ display: "block", color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
+                Deep search may take longer. Results still need official verification. Standard search (up to 500
+                candidates) is enough for most searches.
               </span>
-            </label>
+            </span>
+          </label>
+        </div>
+
+        {searchingMajor && (
+          <div style={{ marginTop: 10 }}>
+            <Spinner label={comboMode
+              ? "Searching double-major options and checking primary and secondary major fit…"
+              : "Searching colleges and checking official program data…"} />
           </div>
         )}
-
-        {searchingMajor && <div style={{ marginTop: 10 }}><Spinner label="Searching colleges and checking official program data…" /></div>}
 
         {searchSuccessMsg && !searchingMajor && !majorSearchError && <SuccessNote>{searchSuccessMsg}</SuccessNote>}
 
@@ -374,6 +379,9 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
   const [evaluating, setEvaluating] = useState(false);
   const [evalErr, setEvalErr] = useState(null);
   const [comboSaveMsg, setComboSaveMsg] = useState(null);
+  const [comboSaving, setComboSaving] = useState(false);
+  const [listMsg, setListMsg] = useState(null);
+  const isCombo = !!searchMeta?.combo;
 
   const evaluate = async () => {
     setEvaluating(true); setEvalErr(null);
@@ -385,18 +393,49 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
   };
 
   const saveComboToDecisionPlan = async () => {
-    if (!studentId) return;
+    if (!studentId || comboSaving) return; // guard against duplicate clicks
+    setComboSaving(true); setComboSaveMsg(null);
     try {
       await api.addDecisionItem(studentId, {
         collegeId: c.id, collegeName: c.name,
         careerTrack: profile?.preferredScenarioId || null,
         programVerificationStatus: "Needs manual verification",
+        primaryMajor: searchMeta.major1, secondaryMajor: searchMeta.major2,
+        doubleMajorStatus: c.doubleMajorStatus || "Needs official verification",
+        doubleMajorVerificationStatus: c.doubleMajorVerificationStatus || "Needs manual verification",
+        doubleMajorNotes: "Both fields exist here per College Scorecard, but the double-major policy is not yet verified.",
+        sourceContext: "Selected from Double Major Search",
         notes: `Considering a double major: ${searchMeta.major1} + ${searchMeta.major2}. Both fields exist here per College Scorecard, but the double-major policy is not yet verified -- confirm with the college's advising office.`,
-        actionNeeded: "Confirm the college's actual double-major policy (allowed, capped, separate application?) with its advising office or catalog.",
+        actionNeeded: "Verify double-major rules and school-to-school restrictions with the college's advising office or catalog.",
       });
-      setComboSaveMsg("Saved to Decision Plan as a double-major consideration (unverified policy).");
+      setComboSaveMsg("Saved to Decision Plan as a double-major consideration. Double-major path needs official verification.");
     } catch (e) {
       setComboSaveMsg(`Could not save: ${e.message}`);
+    } finally { setComboSaving(false); }
+  };
+
+  // "+ List" for a double-major result: on first save, this IS the add (goes
+  // through the normal toggle). If the college is already on the list (saved
+  // from anywhere else), clicking here should ADD this pathway to the
+  // existing card, never remove it or create a second card for the same
+  // college -- forceAdd=true guarantees that.
+  const addDoubleMajorOption = async () => {
+    setListMsg(null);
+    try {
+      await onToggleSave(
+        { college: { id: c.id, name: c.name, city: c.city, state: c.state }, admission: null, overall: null },
+        {
+          context: "Selected from Double Major Search",
+          primaryMajor: searchMeta.major1, secondaryMajor: searchMeta.major2,
+          doubleMajorLabel: `${searchMeta.major1} + ${searchMeta.major2}`,
+          doubleMajorStatus: c.doubleMajorStatus || "Needs official verification",
+          doubleMajorVerificationStatus: c.doubleMajorVerificationStatus || "Needs manual verification",
+        },
+        true // forceAdd -- merge in this pathway, don't toggle off an existing save
+      );
+      setListMsg("Added as double-major option.");
+    } catch (e) {
+      setListMsg(`Could not add: ${e.message}`);
     }
   };
 
@@ -425,10 +464,10 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
         <div style={{ marginTop: 8 }}>
           <div className="row wrap" style={{ gap: 6 }}>
             <span className="pill" style={{ background: "var(--safety-b)" }}>Offers both fields ✓</span>
-            {c.possibleCombination && <span className="pill" style={{ background: "var(--target-b)" }}>Possible combination only -- not a guarantee</span>}
-            <span className="pill" style={{ background: "var(--amber-b)" }}>
-              Double-major policy: {c.verifiedDoubleMajorPolicy === "verified" ? "verified" : "not verified"}
-            </span>
+            {c.doubleMajorStatus && <span className="pill" style={{ background: "var(--target-b)" }}>{c.doubleMajorStatus}</span>}
+          </div>
+          <div className="note" style={{ marginTop: 6, fontWeight: 600, color: "var(--amber)" }}>
+            Double-major path needs official verification.
           </div>
           <div className="grid cols-2" style={{ gap: 8, marginTop: 8 }}>
             <div>
@@ -461,6 +500,7 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
       )}
       {evalErr && <div className="note" style={{ marginTop: 6, color: "var(--reach)" }}>{evalErr}</div>}
       {comboSaveMsg && <div className="note" style={{ marginTop: 6, color: "var(--safety)" }}>{comboSaveMsg}</div>}
+      {listMsg && <div className="note" style={{ marginTop: 6, color: "var(--safety)" }}>{listMsg}</div>}
 
       <div className="row" style={{ gap: 10, marginTop: 6 }}>
         <button className="link" onClick={() => onOpen && onOpen(c.id)}>View college →</button>
@@ -470,12 +510,32 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
           </button>
         )}
         {c.offersMajor1 != null && studentId && (
-          <button className="link" onClick={saveComboToDecisionPlan}>Save as double-major consideration →</button>
+          <button className="link" onClick={saveComboToDecisionPlan} disabled={comboSaving}>
+            {comboSaving ? "Saving to Decision Plan…" : "Save as double-major consideration →"}
+          </button>
         )}
-        {onToggleSave && (
-          <button className="link" onClick={() => onToggleSave({ college: { id: c.id, name: c.name, state: c.state }, admission: null, overall: null })}>
+        {onToggleSave && !isCombo && (
+          <button className="link" onClick={() => onToggleSave(
+            { college: { id: c.id, name: c.name, city: c.city, state: c.state }, admission: null, overall: null },
+            { context: "Selected from Single Major Search" }
+          )}>
             {savedIds?.has(c.id) ? "Saved ✓" : "+ List"}
           </button>
+        )}
+        {onToggleSave && isCombo && !savedIds?.has(c.id) && (
+          <button className="link" onClick={() => onToggleSave(
+            { college: { id: c.id, name: c.name, city: c.city, state: c.state }, admission: null, overall: null },
+            {
+              context: "Selected from Double Major Search",
+              primaryMajor: searchMeta.major1, secondaryMajor: searchMeta.major2,
+              doubleMajorLabel: `${searchMeta.major1} + ${searchMeta.major2}`,
+              doubleMajorStatus: c.doubleMajorStatus || "Needs official verification",
+              doubleMajorVerificationStatus: c.doubleMajorVerificationStatus || "Needs manual verification",
+            }
+          )}>+ List</button>
+        )}
+        {onToggleSave && isCombo && savedIds?.has(c.id) && (
+          <button className="link" onClick={addDoubleMajorOption}>Add as double-major option →</button>
         )}
       </div>
     </div>

@@ -160,7 +160,14 @@ export const api = {
     if (deep) q.set("deep", "true");
     return afetch(`/api/colleges/by-major?${q.toString()}`).then(j);
   },
-  collegeMajorCombos: (major1, major2, state) => afetch(`/api/colleges/major-combos?major1=${encodeURIComponent(major1)}${major2 ? `&major2=${encodeURIComponent(major2)}` : ""}${state ? `&state=${encodeURIComponent(state)}` : ""}`).then(j),
+  collegeMajorCombos: (major1, major2, state, { control, deep } = {}) => {
+    const q = new URLSearchParams({ major1 });
+    if (major2) q.set("major2", major2);
+    if (state) q.set("state", state);
+    if (control && control !== "all") q.set("control", control);
+    if (deep) q.set("deep", "true");
+    return afetch(`/api/colleges/major-combos?${q.toString()}`).then(j);
+  },
   collegeDeadlines: (id) => afetch(`/api/colleges/${id}/deadlines`).then(j),
   browseColleges: ({ name, state, control, major, page = 0, perPage = 25 }) => {
     const q = new URLSearchParams();

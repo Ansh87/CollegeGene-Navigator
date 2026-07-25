@@ -8,6 +8,7 @@ import { answerAdvisor, buildEssayGrounding } from "../services/advisor.js";
 import { buildStrategy } from "../services/strategyPlanner.js";
 import { getVerified } from "../services/verified.js";
 import { deriveProfileSignals } from "../services/profileSignals.js";
+import { mergeSelectionContexts, mergeDoubleMajorPathway } from "../services/selectionContext.js";
 
 // ---------- Careers ----------
 export const careersRouter = express.Router();
@@ -102,16 +103,25 @@ studentRouter.get("/:id", (req, res) => {
 const upsertList = db.prepare(`
   INSERT INTO student_college_list (student_id,college_id,college_name,city,state,category,admission_probability_range,
     overall_fit_score,academic_fit_score,major_fit_score,career_fit_score,financial_fit_score,
-    application_round,status,notes,created_at,updated_at)
+    application_round,status,notes,created_at,updated_at,
+    selection_contexts_json,source_context,primary_major,secondary_major,double_major_label,
+    double_major_status,double_major_verification_status,double_major_notes,double_major_pathways_json,selected_at)
   VALUES (@student_id,@college_id,@college_name,@city,@state,@category,@admission_probability_range,@overall_fit_score,
     @academic_fit_score,@major_fit_score,@career_fit_score,@financial_fit_score,@application_round,
-    @status,@notes,@created_at,@updated_at)
+    @status,@notes,@created_at,@updated_at,
+    @selection_contexts_json,@source_context,@primary_major,@secondary_major,@double_major_label,
+    @double_major_status,@double_major_verification_status,@double_major_notes,@double_major_pathways_json,@selected_at)
   ON CONFLICT(student_id,college_id) DO UPDATE SET college_name=excluded.college_name,city=excluded.city,state=excluded.state,
     category=excluded.category,
     admission_probability_range=excluded.admission_probability_range,overall_fit_score=excluded.overall_fit_score,
     academic_fit_score=excluded.academic_fit_score,major_fit_score=excluded.major_fit_score,
     career_fit_score=excluded.career_fit_score,financial_fit_score=excluded.financial_fit_score,
-    application_round=excluded.application_round,status=excluded.status,notes=excluded.notes,updated_at=excluded.updated_at`);
+    application_round=excluded.application_round,status=excluded.status,notes=excluded.notes,updated_at=excluded.updated_at,
+    selection_contexts_json=excluded.selection_contexts_json,
+    primary_major=excluded.primary_major,secondary_major=excluded.secondary_major,
+    double_major_label=excluded.double_major_label,double_major_status=excluded.double_major_status,
+    double_major_verification_status=excluded.double_major_verification_status,double_major_notes=excluded.double_major_notes,
+    double_major_pathways_json=excluded.double_major_pathways_json,selected_at=excluded.selected_at`);
 
 // ---------- Scholarships (manual tracker) ----------
 const scholCols = ["name","provider","amount","renewable","eligibility","deadline","essays",
@@ -215,9 +225,33 @@ studentRouter.post("/:id/strategy", (req, res) => {
   res.json(buildStrategy(rows, profile));
 });
 
+// Adding a college that's ALREADY on the list (e.g. from a different search
+// page) merges into the existing row instead of creating a duplicate card:
+// selection_contexts accumulates every place it's been selected from, and a
+// double-major pathway (primary+secondary) is added to/updated within the
+// existing pathway list rather than overwriting a previous pairing.
 studentRouter.put("/:id/list/:collegeId", (req, res) => {
   const b = req.body || {};
-  const now = Date.now();
+  const ts = Date.now();
+  const existing = db.prepare("SELECT * FROM student_college_list WHERE student_id=? AND college_id=?")
+    .get(req.params.id, req.params.collegeId);
+
+  const context = b.context || null; // e.g. "Selected from Double Major Search"
+  const selectionContextsJson = mergeSelectionContexts(existing?.selection_contexts_json, context);
+
+  const hasDoubleMajorInfo = !!(b.primaryMajor && b.secondaryMajor);
+  let pathwaysJson = existing?.double_major_pathways_json || null;
+  if (hasDoubleMajorInfo) {
+    pathwaysJson = mergeDoubleMajorPathway(existing?.double_major_pathways_json, {
+      primaryMajor: b.primaryMajor, secondaryMajor: b.secondaryMajor,
+      label: b.doubleMajorLabel || `${b.primaryMajor} + ${b.secondaryMajor}`,
+      status: b.doubleMajorStatus || "Needs official verification",
+      verificationStatus: b.doubleMajorVerificationStatus || "Needs manual verification",
+      notes: b.doubleMajorNotes || null,
+      addedAt: ts,
+    });
+  }
+
   upsertList.run({
     student_id: req.params.id, college_id: req.params.collegeId,
     college_name: b.name ?? b.college_name ?? null, city: b.city ?? null, state: b.state ?? null,
@@ -225,7 +259,20 @@ studentRouter.put("/:id/list/:collegeId", (req, res) => {
     overall_fit_score: b.overall ?? null, academic_fit_score: b.academic ?? null,
     major_fit_score: b.major ?? null, career_fit_score: b.career ?? null,
     financial_fit_score: b.financial ?? null, application_round: b.round ?? null,
-    status: b.status ?? "Considering", notes: b.notes ?? null, created_at: now, updated_at: now,
+    status: b.status ?? existing?.status ?? "Considering", notes: b.notes ?? existing?.notes ?? null,
+    created_at: existing?.created_at ?? ts, updated_at: ts,
+    selection_contexts_json: selectionContextsJson,
+    source_context: existing?.source_context || context || "Selected manually",
+    // Flat fields mirror the most-recently-added double-major pathway (simple
+    // display + CSV); the full set of pathways lives in double_major_pathways_json.
+    primary_major: hasDoubleMajorInfo ? b.primaryMajor : (existing?.primary_major ?? null),
+    secondary_major: hasDoubleMajorInfo ? b.secondaryMajor : (existing?.secondary_major ?? null),
+    double_major_label: hasDoubleMajorInfo ? (b.doubleMajorLabel || `${b.primaryMajor} + ${b.secondaryMajor}`) : (existing?.double_major_label ?? null),
+    double_major_status: hasDoubleMajorInfo ? (b.doubleMajorStatus || "Needs official verification") : (existing?.double_major_status ?? null),
+    double_major_verification_status: hasDoubleMajorInfo ? (b.doubleMajorVerificationStatus || "Needs manual verification") : (existing?.double_major_verification_status ?? null),
+    double_major_notes: hasDoubleMajorInfo ? (b.doubleMajorNotes ?? existing?.double_major_notes ?? null) : (existing?.double_major_notes ?? null),
+    double_major_pathways_json: pathwaysJson,
+    selected_at: existing?.selected_at ?? ts,
   });
   res.json({ ok: true });
 });

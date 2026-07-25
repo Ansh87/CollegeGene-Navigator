@@ -192,27 +192,45 @@ const FIELD_LABELS = {
 };
 function prettyField(k) { return FIELD_LABELS[k] || k; }
 
-  const toggleSave = async (scored) => {
+  // toggleSave(scored, opts, forceAdd)
+  //   opts: optional selection-context fields merged into the saved row --
+  //     { context, primaryMajor, secondaryMajor, doubleMajorLabel,
+  //       doubleMajorStatus, doubleMajorVerificationStatus, doubleMajorNotes }.
+  //     `context` should be one of the SELECTION_CONTEXTS labels (see
+  //     server/src/services/selectionContext.js); the server merges it into
+  //     the college's accumulated selection_contexts rather than overwriting.
+  //   forceAdd: when true, never removes an already-saved college -- used by
+  //     "Add as double-major option" so re-adding a college that's already on
+  //     the list (from a different search) merges in the new pathway instead
+  //     of toggling it off.
+  const toggleSave = async (scored, opts = {}, forceAdd = false) => {
     const col = scored.college || {};
     const cid = col.id;
     if (!cid) return;
-    if (savedIds.has(cid)) {
+    if (savedIds.has(cid) && !forceAdd) {
       setSaved((s) => s.filter((x) => x.college_id !== cid));
       api.removeListItem(STUDENT_ID, cid).catch(() => {});
-    } else {
-      const adm = scored.admission || {};
-      const subs = scored.subs || {};
-      const row = {
-        college_id: cid, name: col.name || cid, college_name: col.name || cid,
-        city: col.city || null, state: col.state || null,
-        category: adm.category || null, range: adm.range || null,
-        overall: scored.overall ?? null, overall_fit_score: scored.overall ?? null,
-        academic: subs.academic ?? null,
-        career: subs.career ?? null, financial: subs.financial ?? null, status: "Considering",
-      };
-      setSaved((s) => [...s, row]);
-      api.saveListItem(STUDENT_ID, cid, row).catch(() => {});
+      return;
     }
+    const adm = scored.admission || {};
+    const subs = scored.subs || {};
+    const row = {
+      college_id: cid, name: col.name || cid, college_name: col.name || cid,
+      city: col.city || null, state: col.state || null,
+      category: adm.category || null, range: adm.range || null,
+      overall: scored.overall ?? null, overall_fit_score: scored.overall ?? null,
+      academic: subs.academic ?? null,
+      career: subs.career ?? null, financial: subs.financial ?? null, status: "Considering",
+      ...opts,
+    };
+    setSaved((s) => (s.some((x) => x.college_id === cid) ? s : [...s, row]));
+    try {
+      await api.saveListItem(STUDENT_ID, cid, row);
+      // Re-fetch so merged server-side fields (accumulated selection contexts,
+      // double-major pathways) are reflected exactly, not guessed client-side.
+      const r = await api.getList(STUDENT_ID);
+      setSaved(r.list || []);
+    } catch { /* saved list keeps the optimistic row; next load will reconcile */ }
   };
 
   // Direct remove (used by My list) -- avoids relying on a full scored object.
