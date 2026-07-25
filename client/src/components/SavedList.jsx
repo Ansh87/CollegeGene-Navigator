@@ -3,7 +3,7 @@
 // is never mysteriously blank.
 import React, { useState, useEffect } from "react";
 import { api } from "../lib/api.js";
-import { CategoryTag, SetupPlanningButton, InlineSpinner } from "./ui.jsx";
+import { CategoryTag, SetupPlanningButton, InlineSpinner, fmtPct, fmtUSD } from "./ui.jsx";
 
 function safeParseArray(json) {
   if (!json) return [];
@@ -169,7 +169,6 @@ export function SavedList({ studentId, saved, profile, onOpen, onRemove, onClear
               <div>
                 <h3 style={{ marginBottom: 3 }}>{s.college_name || s.name || s.college_id}</h3>
                 <div className="note">{[s.city, s.state].filter(Boolean).join(", ")}
-                  {s.overall_fit_score != null ? ` · Fit ${s.overall_fit_score}` : ""}
                   {s.status ? ` · ${s.status}` : ""}</div>
               </div>
               <div className="row" style={{ gap: 8 }}>
@@ -178,6 +177,20 @@ export function SavedList({ studentId, saved, profile, onOpen, onRemove, onClear
                 <button className="btn ghost sm" onClick={() => onRemove(s.college_id)}>Remove</button>
               </div>
             </div>
+
+            {/* Same Fit/Admit/Est. cost/Major fit stat pills MatchCard shows --
+                populated on save and kept current by "Evaluate Against My
+                Profile" (below), so an imported or otherwise-added college
+                shows exactly where it stands (fit, admit odds, cost) just
+                like a college found through search. */}
+            {(s.overall_fit_score != null || s.admission_rate != null || s.estimated_net_cost != null || s.major_fit_score != null) && (
+              <div className="row wrap" style={{ gap: 6 }}>
+                {s.overall_fit_score != null && <span className="pill">Fit {s.overall_fit_score}</span>}
+                {fmtPct(s.admission_rate) && <span className="pill">Admit {fmtPct(s.admission_rate)}</span>}
+                {fmtUSD(s.estimated_net_cost) && <span className="pill">Est. cost {fmtUSD(s.estimated_net_cost)}</span>}
+                {s.major_fit_score != null && <span className="pill">Major fit {s.major_fit_score}</span>}
+              </div>
+            )}
 
             {isImported && (
               <div className="card pad" style={{ background: "var(--paper-2)", padding: 10 }}>

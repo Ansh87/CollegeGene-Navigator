@@ -616,6 +616,17 @@ addColumnIfMissing("student_college_list", "match_confidence", "TEXT");
 addColumnIfMissing("student_college_list", "profile_score_at_import", "REAL");
 addColumnIfMissing("student_college_list", "admission_category_at_import", "TEXT");
 
+// "Evaluate Against My Profile" (Issue 2): the raw official admission rate
+// and this student's estimated net cost, captured alongside the existing fit
+// scores (overall/academic/major/career/financial_fit_score above) so every
+// My List card can show the same Fit / Admit / Est. cost / Major fit pills
+// MatchCard.jsx already shows on Matches -- same values, same source
+// (scoreCollege()), just persisted here so they survive without re-scoring.
+// Null until the college has been scored at least once (add, import, or an
+// Evaluate Against My Profile run) -- never guessed.
+addColumnIfMissing("student_college_list", "admission_rate", "REAL");
+addColumnIfMissing("student_college_list", "estimated_net_cost", "REAL");
+
 // Same import-provenance fields on Decision Plan items, so an imported
 // college's card there can also show the Imported List badge + admission
 // category at import time without re-querying My List.

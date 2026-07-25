@@ -221,6 +221,12 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
       overall: scored.overall ?? null, overall_fit_score: scored.overall ?? null,
       academic: subs.academic ?? null,
       career: subs.career ?? null, financial: subs.financial ?? null, status: "Considering",
+      // Same Fit/Admit/Est.cost/Major fit values MatchCard already shows --
+      // persisted here too so a freshly-saved My List card can show them
+      // right away, not just after a later "Evaluate Against My Profile" run.
+      major: subs.major ?? null, major_fit_score: subs.major ?? null,
+      admissionRate: col.admissionRate ?? null, admission_rate: col.admissionRate ?? null,
+      netCost: scored.netCost ?? null, estimated_net_cost: scored.netCost ?? null,
       ...opts,
     };
     setSaved((s) => (s.some((x) => x.college_id === cid) ? s : [...s, row]));

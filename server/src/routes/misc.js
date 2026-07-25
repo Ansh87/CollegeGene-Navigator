@@ -112,13 +112,16 @@ studentRouter.get("/:id", (req, res) => {
 const upsertList = db.prepare(`
   INSERT INTO student_college_list (student_id,college_id,college_name,city,state,category,admission_probability_range,
     overall_fit_score,academic_fit_score,major_fit_score,career_fit_score,financial_fit_score,
+    admission_rate,estimated_net_cost,
     application_round,status,notes,created_at,updated_at,
     selection_contexts_json,source_context,primary_major,secondary_major,double_major_label,
     double_major_status,double_major_verification_status,double_major_notes,double_major_pathways_json,selected_at,
     import_batch_id,original_uploaded_name,matched_official_name,match_confidence,
     profile_score_at_import,admission_category_at_import)
   VALUES (@student_id,@college_id,@college_name,@city,@state,@category,@admission_probability_range,@overall_fit_score,
-    @academic_fit_score,@major_fit_score,@career_fit_score,@financial_fit_score,@application_round,
+    @academic_fit_score,@major_fit_score,@career_fit_score,@financial_fit_score,
+    @admission_rate,@estimated_net_cost,
+    @application_round,
     @status,@notes,@created_at,@updated_at,
     @selection_contexts_json,@source_context,@primary_major,@secondary_major,@double_major_label,
     @double_major_status,@double_major_verification_status,@double_major_notes,@double_major_pathways_json,@selected_at,
@@ -129,6 +132,7 @@ const upsertList = db.prepare(`
     admission_probability_range=excluded.admission_probability_range,overall_fit_score=excluded.overall_fit_score,
     academic_fit_score=excluded.academic_fit_score,major_fit_score=excluded.major_fit_score,
     career_fit_score=excluded.career_fit_score,financial_fit_score=excluded.financial_fit_score,
+    admission_rate=excluded.admission_rate,estimated_net_cost=excluded.estimated_net_cost,
     application_round=excluded.application_round,status=excluded.status,notes=excluded.notes,updated_at=excluded.updated_at,
     selection_contexts_json=excluded.selection_contexts_json,
     primary_major=excluded.primary_major,secondary_major=excluded.secondary_major,
@@ -181,7 +185,16 @@ export function upsertListItem(studentId, collegeId, b) {
     category: b.category ?? null, admission_probability_range: b.range ?? null,
     overall_fit_score: b.overall ?? null, academic_fit_score: b.academic ?? null,
     major_fit_score: b.major ?? null, career_fit_score: b.career ?? null,
-    financial_fit_score: b.financial ?? null, application_round: b.round ?? null,
+    financial_fit_score: b.financial ?? null,
+    // Raw official admission rate + this student's estimated net cost --
+    // same values scoreCollege() already computes, just persisted here too so
+    // My List cards can show Fit/Admit/Est. cost/Major fit without a live
+    // re-fetch. Preserves whatever was already on the row when a caller
+    // doesn't have fresh values to offer (e.g. a plain status/notes edit),
+    // rather than blanking out a previously-evaluated card.
+    admission_rate: b.admissionRate !== undefined ? b.admissionRate : (existing?.admission_rate ?? null),
+    estimated_net_cost: b.netCost !== undefined ? b.netCost : (existing?.estimated_net_cost ?? null),
+    application_round: b.round ?? null,
     status: b.status ?? existing?.status ?? "Considering", notes: b.notes ?? existing?.notes ?? null,
     created_at: existing?.created_at ?? ts, updated_at: ts,
     selection_contexts_json: selectionContextsJson,
@@ -319,6 +332,7 @@ const updateListScoreStmt = db.prepare(`
   UPDATE student_college_list
   SET category=@category, admission_probability_range=@range, overall_fit_score=@overall,
       academic_fit_score=@academic, career_fit_score=@career, financial_fit_score=@financial,
+      major_fit_score=@major, admission_rate=@admission_rate, estimated_net_cost=@estimated_net_cost,
       updated_at=@updated_at
   WHERE student_id=@student_id AND college_id=@college_id
 `);
@@ -362,6 +376,8 @@ studentRouter.post("/:id/list/evaluate", async (req, res) => {
       student_id: studentId, college_id: row.college_id,
       category, range: scored?.admission?.range || null, overall: scored?.overall ?? null,
       academic: scored?.subs?.academic ?? null, career: scored?.subs?.career ?? null, financial: scored?.subs?.financial ?? null,
+      major: scored?.subs?.major ?? null,
+      admission_rate: college.admissionRate ?? null, estimated_net_cost: scored?.netCost ?? null,
       updated_at: now,
     });
     if (planByCollege.has(row.college_id)) {
@@ -607,6 +623,8 @@ studentRouter.post("/:id/import/confirm", async (req, res) => {
       category: scored?.admission?.category || null, range: scored?.admission?.range || null,
       overall: scored?.overall ?? null, academic: scored?.subs?.academic ?? null,
       career: scored?.subs?.career ?? null, financial: scored?.subs?.financial ?? null,
+      major: scored?.subs?.major ?? null,
+      admissionRate: official?.admissionRate ?? null, netCost: scored?.netCost ?? null,
       context: "Added from Imported List",
       importBatchId: batchId,
       originalUploadedName: originalName,
