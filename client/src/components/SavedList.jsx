@@ -47,13 +47,17 @@ export function SavedList({ studentId, saved, onOpen, onRemove, onClearAll }) {
       "Primary official program name", "Secondary official program name",
       "Primary program type", "Secondary program type",
       "Double-major policy type", "Double-major allowed status",
-      "Source URL", "Last checked", "Action needed",
+      "Source URL", "Last checked",
+      "Import batch ID", "Original uploaded name", "Matched official name", "Match confidence",
+      "Admission category at import", "Profile score at import", "Verification status", "Action needed",
     ];
     const lines = [headers.join(",")];
     for (const s of saved) {
       const contexts = safeParseArray(s.selection_contexts_json);
       const ver = s.primary_major ? dmVerByKey.get(verificationKey(s.college_id, s.primary_major, s.secondary_major)) : null;
       const confirmed = !!ver?.confirmed;
+      const dmActionNeeded = s.primary_major && !confirmed ? "Verify double-major rules" : "";
+      const importActionNeeded = s.import_batch_id && (s.match_confidence === "Medium confidence" || s.match_confidence === "Low confidence") ? "Verify official college match" : "";
       lines.push([
         s.college_name || s.name || s.college_id, s.city, s.state, s.category,
         s.admission_probability_range, s.overall_fit_score, s.status,
@@ -64,7 +68,9 @@ export function SavedList({ studentId, saved, onOpen, onRemove, onClearAll }) {
         ver?.primary_program_type || "", ver?.secondary_program_type || "",
         ver?.double_major_policy_type || "", ver?.double_major_allowed_status || "",
         ver?.source_url || "", ver?.last_checked || "",
-        s.primary_major ? (confirmed ? "" : "Verify double-major rules") : "",
+        s.import_batch_id || "", s.original_uploaded_name || "", s.matched_official_name || "", s.match_confidence || "",
+        s.admission_category_at_import || "", s.profile_score_at_import ?? "", s.status || "",
+        [dmActionNeeded, importActionNeeded].filter(Boolean).join("; "),
       ].map(csvEscape).join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
@@ -104,6 +110,9 @@ export function SavedList({ studentId, saved, onOpen, onRemove, onClearAll }) {
           const contexts = safeParseArray(s.selection_contexts_json);
           const pathways = safeParseArray(s.double_major_pathways_json);
           const isDoubleMajor = contexts.includes("Selected from Double Major Search") || !!s.primary_major;
+          const isImported = contexts.includes("Added from Imported List") || !!s.import_batch_id;
+          const importCorrected = isImported && s.original_uploaded_name
+            && s.matched_official_name && s.original_uploaded_name.toLowerCase().trim() !== s.matched_official_name.toLowerCase().trim();
           return (
           <div key={s.college_id} className="card pad stack" style={{ gap: 8 }}>
             <div className="row spread">
@@ -119,6 +128,22 @@ export function SavedList({ studentId, saved, onOpen, onRemove, onClearAll }) {
                 <button className="btn ghost sm" onClick={() => onRemove(s.college_id)}>Remove</button>
               </div>
             </div>
+
+            {isImported && (
+              <div className="card pad" style={{ background: "var(--paper-2)", padding: 10 }}>
+                <div className="row wrap" style={{ gap: 6, alignItems: "center" }}>
+                  <span className="pill" style={{ background: "var(--target-b)" }}>Imported List</span>
+                  {s.match_confidence && <span className="note" style={{ fontSize: 11 }}>{s.match_confidence}</span>}
+                </div>
+                {s.original_uploaded_name && (
+                  <div className="note" style={{ marginTop: 4 }}>
+                    Original uploaded name: <strong>{s.original_uploaded_name}</strong>
+                    {importCorrected && <span> · Matched official name: <strong>{s.matched_official_name}</strong></span>}
+                  </div>
+                )}
+                <div className="note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Added from imported list</div>
+              </div>
+            )}
 
             {(isDoubleMajor || contexts.length > 0) && (
               <div className="row wrap" style={{ gap: 6 }}>

@@ -52,13 +52,17 @@ decisionPlanRouter.post("/:id/items", (req, res) => {
       major_risk, cost_risk, application_round, decision_status, action_needed, sticker_price, average_net_price,
       income_band_net_price, merit_aid_possibility, need_based_aid_strength, net_price_calculator_url,
       npc_completed, estimated_family_cost, financial_safety, notes, created_at, updated_at,
-      primary_major, secondary_major, double_major_status, double_major_verification_status, double_major_notes, source_context)
+      primary_major, secondary_major, double_major_status, double_major_verification_status, double_major_notes, source_context,
+      import_batch_id, original_uploaded_name, matched_official_name, match_confidence,
+      profile_score_at_import, admission_category_at_import)
     VALUES (@item_id, @student_id, @college_id, @college_name, @program_id, @program_name,
       @special_programs_json, @career_track, @admission_category, @program_verification_status, @admission_basis,
       @major_risk, @cost_risk, @application_round, @decision_status, @action_needed, @sticker_price, @average_net_price,
       @income_band_net_price, @merit_aid_possibility, @need_based_aid_strength, @net_price_calculator_url,
       @npc_completed, @estimated_family_cost, @financial_safety, @notes, @created_at, @updated_at,
-      @primary_major, @secondary_major, @double_major_status, @double_major_verification_status, @double_major_notes, @source_context)
+      @primary_major, @secondary_major, @double_major_status, @double_major_verification_status, @double_major_notes, @source_context,
+      @import_batch_id, @original_uploaded_name, @matched_official_name, @match_confidence,
+      @profile_score_at_import, @admission_category_at_import)
   `).run({
     item_id: itemId, student_id: req.params.id, college_id: b.collegeId || null, college_name: b.collegeName || null,
     program_id: b.programId || null, program_name: b.programName || null,
@@ -74,6 +78,9 @@ decisionPlanRouter.post("/:id/items", (req, res) => {
     primary_major: b.primaryMajor || null, secondary_major: b.secondaryMajor || null,
     double_major_status: b.doubleMajorStatus || null, double_major_verification_status: b.doubleMajorVerificationStatus || null,
     double_major_notes: b.doubleMajorNotes || null, source_context: b.sourceContext || null,
+    import_batch_id: b.importBatchId || null, original_uploaded_name: b.originalUploadedName || null,
+    matched_official_name: b.matchedOfficialName || null, match_confidence: b.matchConfidence || null,
+    profile_score_at_import: b.profileScoreAtImport ?? null, admission_category_at_import: b.admissionCategoryAtImport || null,
   });
   // Auto-create an empty verification checklist so the family always has one to fill in.
   db.prepare(`
@@ -96,6 +103,9 @@ const ITEM_FIELD_MAP = {
   primaryMajor: "primary_major", secondaryMajor: "secondary_major", doubleMajorStatus: "double_major_status",
   doubleMajorVerificationStatus: "double_major_verification_status", doubleMajorNotes: "double_major_notes",
   sourceContext: "source_context",
+  importBatchId: "import_batch_id", originalUploadedName: "original_uploaded_name",
+  matchedOfficialName: "matched_official_name", matchConfidence: "match_confidence",
+  profileScoreAtImport: "profile_score_at_import", admissionCategoryAtImport: "admission_category_at_import",
 };
 const BOOL_FIELDS = { npcCompleted: "npc_completed", financialSafety: "financial_safety" };
 const JSON_FIELDS = { specialPrograms: "special_programs_json" };
@@ -511,6 +521,8 @@ decisionPlanRouter.get("/:id/export.csv", (req, res) => {
     "Application Timeline: earliest deadline", "Application Timeline: round", "Application Timeline: verification status",
     "Source context", "Primary major", "Secondary major", "Double-major status", "Double-major verification status",
     ...DM_EXPORT_HEADERS,
+    "Import batch ID", "Original uploaded name", "Matched official name", "Match confidence",
+    "Admission category at import", "Profile score at import",
     "Action needed", "Notes", "Source URLs",
   ];
   const lines = [headers.join(",")];
@@ -534,6 +546,8 @@ decisionPlanRouter.get("/:id/export.csv", (req, res) => {
       tl ? `${tl.event_label || tl.event_type}: ${tl.event_date}` : "", tl?.application_round || "", tl?.verification_status || "",
       it.source_context, it.primary_major, it.secondary_major, it.double_major_status, it.double_major_verification_status,
       ...dmExportCells(dmVer, it.primary_major, it.secondary_major),
+      it.import_batch_id || "", it.original_uploaded_name || "", it.matched_official_name || "", it.match_confidence || "",
+      it.admission_category_at_import || "", it.profile_score_at_import ?? "",
       it.action_needed, it.notes, sourceUrls,
     ].map(csvEscape).join(","));
   }

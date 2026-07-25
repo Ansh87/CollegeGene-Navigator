@@ -138,6 +138,18 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
     }
   };
 
+  // If this saved college came in through Import College List, carry its
+  // provenance fields onto the Decision Plan item too, so the card can show
+  // the same "Imported List" badge and original/matched names.
+  const importFieldsFor = (row) => row?.import_batch_id ? {
+    importBatchId: row.import_batch_id,
+    originalUploadedName: row.original_uploaded_name || undefined,
+    matchedOfficialName: row.matched_official_name || undefined,
+    matchConfidence: row.match_confidence || undefined,
+    profileScoreAtImport: row.profile_score_at_import ?? undefined,
+    admissionCategoryAtImport: row.admission_category_at_import || undefined,
+  } : {};
+
   const addFromSaved = async () => {
     if (!addCollegeId) return;
     const row = saved.find((s) => s.college_id === addCollegeId);
@@ -148,14 +160,32 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
     const r = await api.addDecisionItem(studentId, {
       collegeId: row.college_id, collegeName: row.college_name || collegeNames[row.college_id] || row.college_id,
       admissionCategory: row.category || undefined,
+      ...importFieldsFor(row),
     });
     if (r?.item) setItems((list) => [r.item, ...list]);
     setAddCollegeId("");
   };
 
+  // Safer bulk-add: instead of a single "add everything" click, open a review
+  // list with every available saved college pre-checked, and only add the
+  // ones the family confirms. Encourages a look before the whole list lands
+  // on the final Decision Plan.
   const [bulkAdding, setBulkAdding] = useState(false);
-  const addAllFromSaved = async () => {
-    const toAdd = (saved || []).filter((s) => !items.some((it) => it.college_id === s.college_id));
+  const [reviewingBulk, setReviewingBulk] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState(() => new Set());
+  const openBulkReview = () => {
+    setBulkSelected(new Set(availableSaved.map((s) => s.college_id)));
+    setReviewingBulk(true);
+  };
+  const toggleBulkSelected = (collegeId) => {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(collegeId)) next.delete(collegeId); else next.add(collegeId);
+      return next;
+    });
+  };
+  const confirmBulkAdd = async () => {
+    const toAdd = availableSaved.filter((s) => bulkSelected.has(s.college_id));
     if (!toAdd.length) return;
     setBulkAdding(true);
     try {
@@ -164,12 +194,14 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
         const r = await api.addDecisionItem(studentId, {
           collegeId: row.college_id, collegeName: row.college_name || collegeNames[row.college_id] || row.college_id,
           admissionCategory: row.category || undefined,
+          ...importFieldsFor(row),
         }).catch(() => null);
         if (r?.item) added.push(r.item);
       }
       if (added.length) setItems((list) => [...added, ...list]);
     } finally {
       setBulkAdding(false);
+      setReviewingBulk(false);
     }
   };
 
@@ -269,11 +301,33 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
                   {availableSaved.map((s) => <option key={s.college_id} value={s.college_id}>{s.college_name || collegeNames[s.college_id] || s.college_id}</option>)}
                 </select>
                 <button className="btn ghost" disabled={!addCollegeId} onClick={addFromSaved}>Add</button>
-                {availableSaved.length > 1 && (
-                  <button className="btn ghost" disabled={bulkAdding} onClick={addAllFromSaved}>
-                    {bulkAdding ? "Adding…" : `Add all ${availableSaved.length} saved colleges`}
+                {availableSaved.length > 1 && !reviewingBulk && (
+                  <button className="btn ghost" onClick={openBulkReview}>
+                    Review saved colleges before adding
                   </button>
                 )}
+              </div>
+            )}
+            {reviewingBulk && (
+              <div className="card pad" style={{ background: "var(--paper-2)", marginTop: 10 }}>
+                <div className="note" style={{ fontWeight: 600, marginBottom: 6 }}>
+                  Choose which saved colleges to add to the Decision Plan
+                </div>
+                <div className="stack" style={{ gap: 4 }}>
+                  {availableSaved.map((s) => (
+                    <label key={s.college_id} className="row" style={{ gap: 8, alignItems: "center" }}>
+                      <input type="checkbox" checked={bulkSelected.has(s.college_id)} onChange={() => toggleBulkSelected(s.college_id)} />
+                      <span>{s.college_name || collegeNames[s.college_id] || s.college_id}</span>
+                      {s.import_batch_id && <span className="pill" style={{ background: "var(--target-b)" }}>Imported List</span>}
+                    </label>
+                  ))}
+                </div>
+                <div className="row" style={{ gap: 8, marginTop: 10 }}>
+                  <button className="btn primary" disabled={bulkAdding || !bulkSelected.size} onClick={confirmBulkAdd}>
+                    {bulkAdding ? "Adding…" : `Add ${bulkSelected.size} selected saved college${bulkSelected.size === 1 ? "" : "s"}`}
+                  </button>
+                  <button className="btn ghost" disabled={bulkAdding} onClick={() => setReviewingBulk(false)}>Cancel</button>
+                </div>
               </div>
             )}
           </div>
@@ -317,11 +371,22 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
                 <div key={it.item_id} className="card" style={inactive ? { opacity: 0.6 } : undefined}>
                   <div className="pad row spread wrap" style={{ gap: 8 }}>
                     <div style={{ cursor: "pointer", flex: 1, minWidth: 200 }} onClick={() => toggleExpand(it.item_id)}>
-                      <h3 style={inactive ? { textDecoration: "line-through" } : undefined}>{it.college_name || it.college_id}</h3>
+                      <div className="row wrap" style={{ gap: 6, alignItems: "center" }}>
+                        <h3 style={inactive ? { textDecoration: "line-through" } : undefined}>{it.college_name || it.college_id}</h3>
+                        {it.import_batch_id && <span className="pill" style={{ background: "var(--target-b)" }}>Imported List</span>}
+                      </div>
                       <div className="note">
                         {it.program_name || "No specific program set"} · {it.admission_category || "Category not set"} · {it.decision_status}
                         {inactive && <strong style={{ color: "var(--reach)" }}> — not moving forward</strong>}
                       </div>
+                      {it.import_batch_id && (
+                        <div className="note" style={{ fontSize: 11, color: "var(--muted)" }}>
+                          Added from imported list
+                          {it.original_uploaded_name && it.matched_official_name && it.original_uploaded_name.toLowerCase().trim() !== it.matched_official_name.toLowerCase().trim()
+                            ? ` · Original uploaded name: ${it.original_uploaded_name}` : ""}
+                          {it.match_confidence ? ` · ${it.match_confidence}` : ""}
+                        </div>
+                      )}
                       {trackerByCollege[it.college_id] && (
                         <div className="note" style={{ fontSize: 11, color: "var(--muted)" }}>
                           Applications tracker: {trackerByCollege[it.college_id].status || "Considering"}
@@ -601,8 +666,8 @@ function SummaryPanel({ studentId, refreshKey }) {
 // still unresolved, pulled from data already tracked elsewhere in the app.
 // Read-only; every item links back to the page where it can actually be
 // resolved. Backed by GET /api/decision-plan/:id/verification-center.
-const RELATED_PAGE_TAB = { essays: "essays", timeline: "applicationPathways", pathways: "applicationPathways", programs: "programs" };
-const RELATED_PAGE_LABEL = { essays: "Open Essay Center", timeline: "Open Application Timeline", pathways: "Open Application Pathways", programs: "Open Programs & Opportunities", "decision-plan": null };
+const RELATED_PAGE_TAB = { essays: "essays", timeline: "applicationPathways", pathways: "applicationPathways", programs: "programs", list: "saved" };
+const RELATED_PAGE_LABEL = { essays: "Open Essay Center", timeline: "Open Application Timeline", pathways: "Open Application Pathways", programs: "Open Programs & Opportunities", list: "Open My List", "decision-plan": null };
 const PRIORITY_COLOR = { High: "var(--reach)", Medium: "var(--amber)", Low: "var(--muted)" };
 
 function VerificationCenterPanel({ studentId, refreshKey, onGo }) {

@@ -412,4 +412,26 @@ export const api = {
     }).then(j),
   deleteDoubleMajorVerification: (id, verificationId) =>
     afetch(`/api/students/${id}/double-major-verifications/${verificationId}`, { method: "DELETE" }).then(j),
+
+  // ---------------- Import College List ----------------
+  // Paste text goes as JSON; a CSV/text file upload goes as multipart (same
+  // pattern as uploadDocument -- no Content-Type header, so the browser sets
+  // the multipart boundary itself).
+  importParseText: (id, text) =>
+    afetch(`/api/students/${id}/import/parse`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+    }).then(j),
+  importParseFile: (id, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return afetch(`/api/students/${id}/import/parse`, { method: "POST", body: fd }).then(j);
+  },
+  importMatch: (id, names, state, profile) =>
+    afetch(`/api/students/${id}/import/match`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ names, state, profile }),
+    }).then(j),
+  importConfirm: (id, body) =>
+    afetch(`/api/students/${id}/import/confirm`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(j),
 };

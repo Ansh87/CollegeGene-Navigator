@@ -11,6 +11,7 @@ export const SELECTION_CONTEXTS = [
   "Selected from Career Track Search",
   "Selected from Best Fit",
   "Selected from Balanced List",
+  "Added from Imported List",
   "Selected manually",
 ];
 

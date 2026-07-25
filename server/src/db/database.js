@@ -585,6 +585,30 @@ addColumnIfMissing("decision_plan_items", "double_major_verification_status", "T
 addColumnIfMissing("decision_plan_items", "double_major_notes", "TEXT");
 addColumnIfMissing("decision_plan_items", "source_context", "TEXT");
 
+// Import College List: a family can paste/upload a list of college names and
+// have them matched to official College Scorecard records, reviewed, then
+// added to My List. These columns record exactly what was imported and how
+// confident the match was, so "Imported List" badges and CSV exports can be
+// honest about provenance -- separate from (and layered on top of) the
+// selection-context columns above, using the same merge-not-duplicate rule.
+// See services/collegeMatcher.js and routes/collegeImport.js.
+addColumnIfMissing("student_college_list", "import_batch_id", "TEXT");
+addColumnIfMissing("student_college_list", "original_uploaded_name", "TEXT");
+addColumnIfMissing("student_college_list", "matched_official_name", "TEXT");
+addColumnIfMissing("student_college_list", "match_confidence", "TEXT");
+addColumnIfMissing("student_college_list", "profile_score_at_import", "REAL");
+addColumnIfMissing("student_college_list", "admission_category_at_import", "TEXT");
+
+// Same import-provenance fields on Decision Plan items, so an imported
+// college's card there can also show the Imported List badge + admission
+// category at import time without re-querying My List.
+addColumnIfMissing("decision_plan_items", "import_batch_id", "TEXT");
+addColumnIfMissing("decision_plan_items", "original_uploaded_name", "TEXT");
+addColumnIfMissing("decision_plan_items", "matched_official_name", "TEXT");
+addColumnIfMissing("decision_plan_items", "match_confidence", "TEXT");
+addColumnIfMissing("decision_plan_items", "profile_score_at_import", "REAL");
+addColumnIfMissing("decision_plan_items", "admission_category_at_import", "TEXT");
+
 // --- One-time cleanup: earlier versions of the official-domain crawl (Layer 3
 // program discovery) had no quality gate and no de-duplication, so families
 // who ran "Research this college" before this fix may have site-furniture

@@ -28,14 +28,26 @@ function isVerifiedStatus(status) { return VERIFIED_STATUSES.includes(status); }
 // summary and findEssayPromptsForAllColleges -- one consistent college list
 // across every cross-page feature in this app.
 function collegesFor(studentId) {
-  const saved = db.prepare("SELECT college_id, college_name FROM student_college_list WHERE student_id=?").all(studentId);
-  const planned = db.prepare("SELECT college_id, college_name, item_id FROM decision_plan_items WHERE student_id=?").all(studentId);
+  const saved = db.prepare(
+    "SELECT college_id, college_name, import_batch_id, original_uploaded_name, matched_official_name, match_confidence FROM student_college_list WHERE student_id=?"
+  ).all(studentId);
+  const planned = db.prepare(
+    "SELECT college_id, college_name, item_id, import_batch_id, original_uploaded_name, matched_official_name, match_confidence FROM decision_plan_items WHERE student_id=?"
+  ).all(studentId);
   const seen = new Map();
   for (const r of [...saved, ...planned]) {
     const key = r.college_id || `name:${String(r.college_name || "").toLowerCase().trim()}`;
     if (!key || key === "name:") continue;
-    if (!seen.has(key)) seen.set(key, { collegeId: r.college_id || null, collegeName: r.college_name || key, itemId: r.item_id || null });
-    else if (r.item_id && !seen.get(key).itemId) seen.get(key).itemId = r.item_id;
+    const importInfo = r.import_batch_id ? {
+      importBatchId: r.import_batch_id, originalUploadedName: r.original_uploaded_name || null,
+      matchedOfficialName: r.matched_official_name || null, matchConfidence: r.match_confidence || null,
+    } : null;
+    if (!seen.has(key)) seen.set(key, { collegeId: r.college_id || null, collegeName: r.college_name || key, itemId: r.item_id || null, importInfo });
+    else {
+      const existing = seen.get(key);
+      if (r.item_id && !existing.itemId) existing.itemId = r.item_id;
+      if (importInfo && !existing.importInfo) existing.importInfo = importInfo;
+    }
   }
   return [...seen.values()];
 }
@@ -51,6 +63,24 @@ export function buildVerificationCenter(studentId) {
 
   for (const c of colleges) {
     const label = c.collegeName;
+
+    // -- Imported List: verify official college match. Only fires when the
+    // match wasn't a confident exact match -- i.e. it was corrected from a
+    // misspelling, or came back Medium/Low confidence -- so a family
+    // double-checks the app matched the right school before relying on it.
+    // High-confidence, non-corrected imports (e.g. CMU -> Carnegie Mellon
+    // University via a known abbreviation) don't need this nudge.
+    if (c.importInfo) {
+      const { originalUploadedName, matchedOfficialName, matchConfidence } = c.importInfo;
+      const corrected = originalUploadedName && matchedOfficialName
+        && originalUploadedName.toLowerCase().trim() !== matchedOfficialName.toLowerCase().trim();
+      const needsCheck = matchConfidence && matchConfidence !== "High confidence";
+      if (corrected || needsCheck) {
+        addItem({ college: label, collegeId: c.collegeId, issueType: "Verify official college match", status: "Needs verification",
+          actionNeeded: `This college was added from your imported list${originalUploadedName ? ` as "${originalUploadedName}"` : ""} and matched to "${matchedOfficialName || label}"${matchConfidence ? ` (${matchConfidence})` : ""}. Confirm this is the correct college before relying on its data.`,
+          priority: "Medium", relatedPage: "list" });
+      }
+    }
 
     // -- Essay prompts needing verification --
     const prompts = c.collegeId

@@ -246,6 +246,12 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
     ids.forEach((cid) => api.removeListItem(STUDENT_ID, cid).catch(() => {}));
   };
 
+  // Re-fetch the saved list from the server -- used after Import College List
+  // confirms a batch (the server already wrote merged rows; this just
+  // reconciles local state with what actually landed in the database, same
+  // as toggleSave's own re-fetch above).
+  const refreshSaved = () => api.getList(STUDENT_ID).then((r) => setSaved(r.list || [])).catch(() => {});
+
   return (
     <div className="shell">
       <header className="topbar">
@@ -301,7 +307,7 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
 
           {view === "saved" && (
             <MyList studentId={STUDENT_ID} saved={saved} profile={profile} onOpen={setDetailId}
-              onRemove={removeFromList} onClearAll={clearList} onGo={goTo} />
+              onRemove={removeFromList} onClearAll={clearList} onGo={goTo} onImported={refreshSaved} />
           )}
 
           {view === "programs" && <Programs studentId={STUDENT_ID} profile={profile} saved={saved} />}
