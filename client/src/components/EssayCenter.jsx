@@ -11,7 +11,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SourceBadge, InlineSpinner, Spinner, SuccessNote } from "./ui.jsx";
+import { SourceBadge, InlineSpinner, Spinner, SuccessNote, RestoredNote } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 async function authHeader() {
   try {
@@ -212,6 +213,18 @@ export function EssayCenter({ studentId, saved, collegeNames, onGo, initialTrack
   const [selectedTrackId, setSelectedTrackId] = useState(initialTrackId || "");
   const [samples, setSamples] = useState(null);
   const [exampleLinks, setExampleLinks] = useState(null);
+
+  // Issue 1: persist selected tab, selected college (for the Prompt Overview),
+  // and selected career track -- restoring overviewCollege re-triggers the
+  // overview fetch effect below automatically. Never persists essay draft
+  // text itself (only the college/tab/track selection), per spec.
+  const essaySnapshot = { sub, overviewCollege, selectedTrackId };
+  const { restoredFrom } = usePersistedSearch(studentId, "essayCenter", essaySnapshot, (r) => {
+    if (!r) return;
+    if (!focusCollegeId && r.sub) setSub(r.sub); // an explicit focusCollegeId jump takes priority
+    if (!focusCollegeId && r.overviewCollege !== undefined) setOverviewCollege(r.overviewCollege);
+    if (r.selectedTrackId !== undefined) setSelectedTrackId(r.selectedTrackId);
+  });
 
   const [stories, setStories] = useState([]);
   const [storyForm, setStoryForm] = useState(BLANK_STORY_FORM);
@@ -540,6 +553,7 @@ export function EssayCenter({ studentId, saved, collegeNames, onGo, initialTrack
       )}
 
       <Sub tabs={[["prompts", "Prompts & Discovery"], ["strategy", "Strategy by Track"], ["samples", "Sample Structures"], ["examples", "Published Examples"], ["stories", "Story Bank"]]} value={sub} onChange={setSub} />
+      <RestoredNote restoredFrom={restoredFrom} />
 
       {sub === "prompts" && (
         <div className="stack">

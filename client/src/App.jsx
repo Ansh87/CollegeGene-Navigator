@@ -252,6 +252,11 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
   // as toggleSave's own re-fetch above).
   const refreshSaved = () => api.getList(STUDENT_ID).then((r) => setSaved(r.list || [])).catch(() => {});
 
+  // "Evaluate Against My Profile" (My List): the evaluate route already
+  // returns the freshly re-scored list, so just push it straight into state
+  // instead of a second round trip through refreshSaved/getList.
+  const applyEvaluatedList = (list) => setSaved(Array.isArray(list) ? list : []);
+
   return (
     <div className="shell">
       <header className="topbar">
@@ -302,12 +307,13 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
 
           {view === "browse" && (
             <BrowseColleges profile={profile} onOpen={setDetailId}
-              savedIds={savedIds} onToggleSave={toggleSave} />
+              savedIds={savedIds} onToggleSave={toggleSave} studentId={STUDENT_ID} />
           )}
 
           {view === "saved" && (
             <MyList studentId={STUDENT_ID} saved={saved} profile={profile} onOpen={setDetailId}
-              onRemove={removeFromList} onClearAll={clearList} onGo={goTo} onImported={refreshSaved} />
+              onRemove={removeFromList} onClearAll={clearList} onGo={goTo} onImported={refreshSaved}
+              onEvaluated={applyEvaluatedList} />
           )}
 
           {view === "programs" && <Programs studentId={STUDENT_ID} profile={profile} saved={saved} />}

@@ -121,6 +121,25 @@ export function ErrorNote({ children, onRetry }) {
   );
 }
 
+// RestoredNote / SearchStateBar: shared UI for Issue 1 (search/results
+// persistence). Shown wherever a page rehydrated a previous search from
+// localStorage or the server, plus the explicit "Clear search" / "Clear
+// results" / "Start new search" actions the spec requires -- nothing is ever
+// cleared automatically just because the family navigated away and back.
+export function RestoredNote({ restoredFrom }) {
+  if (!restoredFrom) return null;
+  return (
+    <div className="note" style={{ fontSize: 11.5, color: "var(--muted)" }}>
+      {restoredFrom === "local" ? "Last search restored." : "Showing your saved search results."}
+    </div>
+  );
+}
+
+export function ClearSearchButton({ onClear, label = "Clear search" }) {
+  if (!onClear) return null;
+  return <button className="btn ghost sm" onClick={onClear}>{label}</button>;
+}
+
 // The full legal disclaimer required by the spec.
 export function LegalDisclaimer() {
   return (

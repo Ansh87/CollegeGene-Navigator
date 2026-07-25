@@ -3,7 +3,7 @@
 // is never mysteriously blank.
 import React, { useState, useEffect } from "react";
 import { api } from "../lib/api.js";
-import { CategoryTag, SetupPlanningButton } from "./ui.jsx";
+import { CategoryTag, SetupPlanningButton, InlineSpinner } from "./ui.jsx";
 
 function safeParseArray(json) {
   if (!json) return [];
@@ -13,7 +13,35 @@ function safeParseArray(json) {
 const norm = (s) => String(s || "").toLowerCase().trim();
 function verificationKey(collegeId, primary, secondary) { return `${collegeId}::${norm(primary)}::${norm(secondary)}`; }
 
-export function SavedList({ studentId, saved, onOpen, onRemove, onClearAll }) {
+export function SavedList({ studentId, saved, profile, onOpen, onRemove, onClearAll, onEvaluated }) {
+  // Issue 2: "Evaluate Against My Profile" -- re-scores every college
+  // already on My List against the CURRENT student profile, using the exact
+  // same scoring/classification logic every other page uses (server route
+  // POST /students/:id/list/evaluate). Never invents missing data: colleges
+  // whose official data couldn't be checked keep their existing score and
+  // are called out as "needs review" instead of being guessed at.
+  const [evaluating, setEvaluating] = useState(false);
+  const [evalError, setEvalError] = useState(null);
+  const [evalResult, setEvalResult] = useState(null);
+  const runEvaluate = async () => {
+    if (evaluating) return;
+    setEvaluating(true); setEvalError(null);
+    try {
+      const r = await api.evaluateMyList(studentId, profile || {});
+      onEvaluated && onEvaluated(r.list || []);
+      setEvalResult({
+        updated: r.updated || 0, needsReview: r.needsReview || 0,
+        missingAdmissions: r.missingAdmissions || 0, missingCost: r.missingCost || 0,
+        programVerificationNeeded: r.programVerificationNeeded || 0,
+      });
+    } catch (e) {
+      // Keep whatever My List already had on screen -- a failed evaluation
+      // never clears or corrupts existing data.
+      setEvalError(e.message || "Couldn't evaluate your list against your profile right now. Your saved colleges are unchanged.");
+    } finally {
+      setEvaluating(false);
+    }
+  };
   // Official double-major confirmation records (see services/doubleMajorVerification.js).
   // Joined against each saved college's pathway(s) purely for badge/field display --
   // never mutates what's stored on student_college_list itself.
@@ -88,6 +116,9 @@ export function SavedList({ studentId, saved, onOpen, onRemove, onClearAll }) {
           <p className="lead">The colleges you've saved. These feed your Compare, Tracker, and reports.</p>
         </div>
         <div className="row" style={{ gap: 8 }}>
+          <button className="btn primary" onClick={runEvaluate} disabled={evaluating}>
+            {evaluating ? "Evaluating…" : "Evaluate Against My Profile"}
+          </button>
           <button className="btn ghost" onClick={exportCsv}>Export CSV</button>
           {onClearAll && (
             <button className="btn ghost" style={{ color: "var(--reach)" }}
@@ -97,6 +128,25 @@ export function SavedList({ studentId, saved, onOpen, onRemove, onClearAll }) {
           )}
         </div>
       </div>
+
+      {evaluating && (
+        <div className="card pad"><InlineSpinner /> Evaluating your college list against your profile...</div>
+      )}
+      {evalError && !evaluating && (
+        <div className="disclaimer" style={{ borderLeftColor: "var(--reach)" }}>{evalError}</div>
+      )}
+      {evalResult && !evaluating && (
+        <div className="card pad">
+          <div className="note" style={{ fontWeight: 600, marginBottom: 4 }}>Evaluation complete</div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <span className="pill">Updated: {evalResult.updated}</span>
+            <span className="pill">Needs review: {evalResult.needsReview}</span>
+            <span className="pill">Missing admissions data: {evalResult.missingAdmissions}</span>
+            <span className="pill">Missing cost data: {evalResult.missingCost}</span>
+            <span className="pill">Program verification needed: {evalResult.programVerificationNeeded}</span>
+          </div>
+        </div>
+      )}
 
       <div className="kpis">
         <div className="kpi"><div className="n">{saved.length}</div><div className="l">Saved</div></div>

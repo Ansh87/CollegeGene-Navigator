@@ -434,4 +434,22 @@ export const api = {
     afetch(`/api/students/${id}/import/confirm`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }).then(j),
+
+  // ---------------- Search/results persistence (Issue 1) ----------------
+  // One JSON state blob per (student, page key) -- see lib/persistedSearch.js
+  // for the hook that reads/writes these on every relevant page.
+  getSearchState: (id, pageKey) =>
+    afetch(`/api/students/${id}/search-state/${encodeURIComponent(pageKey)}`).then(j),
+  saveSearchState: (id, pageKey, state) =>
+    afetch(`/api/students/${id}/search-state/${encodeURIComponent(pageKey)}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state }),
+    }).then(j),
+  clearSearchState: (id, pageKey) =>
+    afetch(`/api/students/${id}/search-state/${encodeURIComponent(pageKey)}`, { method: "DELETE" }).then(j),
+
+  // ---------------- Evaluate Against My Profile (My List) ----------------
+  evaluateMyList: (id, profile) =>
+    afetch(`/api/students/${id}/list/evaluate`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile }),
+    }).then(j),
 };

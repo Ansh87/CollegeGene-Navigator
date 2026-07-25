@@ -11,7 +11,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SourceBadge, InlineSpinner } from "./ui.jsx";
+import { SourceBadge, InlineSpinner, RestoredNote } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 const SOURCE_TYPES = [
   ["program_page", "Program page"],
@@ -109,6 +110,21 @@ export function Programs({ studentId, profile }) {
   const [savedMsg, setSavedMsg] = useState(null);
   const [showDismissed, setShowDismissed] = useState(false);
   const [showNeedsReview, setShowNeedsReview] = useState(true);
+
+  // Issue 1: keep the selected college, keyword/track/verification filters,
+  // and dismissed/needs-review toggles when navigating away and back (or
+  // refreshing, or logging back in). Restoring selectedCollege re-triggers
+  // loadPrograms() below automatically -- no separate results persistence
+  // needed, so this can never show stale program data.
+  const programsSnapshot = { collegeQuery, selectedCollege, filters, showDismissed, showNeedsReview };
+  const { restoredFrom } = usePersistedSearch(studentId, "programs", programsSnapshot, (r) => {
+    if (!r) return;
+    if (r.collegeQuery !== undefined) setCollegeQuery(r.collegeQuery);
+    if (r.selectedCollege !== undefined) setSelectedCollege(r.selectedCollege);
+    if (r.filters !== undefined) setFilters(r.filters);
+    if (r.showDismissed !== undefined) setShowDismissed(r.showDismissed);
+    if (r.showNeedsReview !== undefined) setShowNeedsReview(r.showNeedsReview);
+  });
 
   useEffect(() => {
     api.listCoursePlans(studentId).then((r) => setTracks(r.plans || [])).catch(() => {});
@@ -315,6 +331,7 @@ export function Programs({ studentId, profile }) {
             <span className="cat Target">Selected: {selectedCollege.name} <button className="link" onClick={() => setSelectedCollege(null)}>clear</button></span>
           )}
         </div>
+        <RestoredNote restoredFrom={restoredFrom} />
         {collegeResults.length > 0 && !selectedCollege && (
           <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
             {collegeResults.map((c) => (

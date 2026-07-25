@@ -3,8 +3,9 @@
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
 import { TopList } from "./TopList.jsx";
-import { Spinner, SourceBadge, fmtUSD, fmtPct } from "./ui.jsx";
+import { Spinner, SourceBadge, fmtUSD, fmtPct, RestoredNote, ClearSearchButton } from "./ui.jsx";
 import { US_STATES } from "../lib/states.js";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 const SUBS = [
   ["all", "All Colleges"],
@@ -19,8 +20,14 @@ const LIST_META = {
   business: { title: "Top Business colleges", blurb: "Curated exploration list with official cost/outcome data where available." },
 };
 
-export function BrowseColleges({ profile, onOpen, savedIds, onToggleSave }) {
+export function BrowseColleges({ profile, onOpen, savedIds, onToggleSave, studentId }) {
   const [sub, setSub] = useState("all");
+
+  // Persist which sub-tab (All/STEM/Finance/Business) was last open, so
+  // returning to Browse Colleges lands back where the family left off.
+  usePersistedSearch(studentId, "browseColleges:tab", { sub }, (restored) => {
+    if (restored && restored.sub) setSub(restored.sub);
+  });
 
   return (
     <div className="stack">
@@ -38,14 +45,14 @@ export function BrowseColleges({ profile, onOpen, savedIds, onToggleSave }) {
       </div>
 
       {sub === "all"
-        ? <AllColleges profile={profile} onOpen={onOpen} savedIds={savedIds} onToggleSave={onToggleSave} />
+        ? <AllColleges profile={profile} onOpen={onOpen} savedIds={savedIds} onToggleSave={onToggleSave} studentId={studentId} />
         : <TopList kind={sub} title={LIST_META[sub].title} blurb={LIST_META[sub].blurb}
-            profile={profile} onOpen={onOpen} savedIds={savedIds} onToggleSave={onToggleSave} />}
+            profile={profile} onOpen={onOpen} savedIds={savedIds} onToggleSave={onToggleSave} studentId={studentId} />}
     </div>
   );
 }
 
-function AllColleges({ profile, onOpen, savedIds, onToggleSave }) {
+function AllColleges({ profile, onOpen, savedIds, onToggleSave, studentId }) {
   const [name, setName] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [control, setControl] = useState("all");
@@ -58,6 +65,25 @@ function AllColleges({ profile, onOpen, savedIds, onToggleSave }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [searched, setSearched] = useState(false);
+
+  // Issue 1: keep the search text, filters, and results on screen until the
+  // family explicitly clears them -- restores on navigation back to this
+  // page, on browser refresh (localStorage), and after logout/login on a
+  // fresh browser (server). Never re-runs the search itself; it just
+  // restores what was already on screen.
+  const snapshot = { name, stateFilter, control, perPage, colleges, page, total, hasMore, searched };
+  const { restoredFrom, clear: clearPersisted } = usePersistedSearch(studentId, "browseColleges:all", snapshot, (r) => {
+    if (!r) return;
+    if (r.name !== undefined) setName(r.name);
+    if (r.stateFilter !== undefined) setStateFilter(r.stateFilter);
+    if (r.control !== undefined) setControl(r.control);
+    if (r.perPage !== undefined) setPerPage(r.perPage);
+    if (r.colleges !== undefined) setColleges(r.colleges);
+    if (r.page !== undefined) setPage(r.page);
+    if (r.total !== undefined) setTotal(r.total);
+    if (r.hasMore !== undefined) setHasMore(r.hasMore);
+    if (r.searched !== undefined) setSearched(r.searched);
+  });
 
   const run = async (nextPage = 0, append = false) => {
     setLoading(true); setErr(null);
@@ -74,7 +100,8 @@ function AllColleges({ profile, onOpen, savedIds, onToggleSave }) {
 
   const reset = () => {
     setName(""); setStateFilter(""); setControl("all");
-    setColleges([]); setTotal(null); setHasMore(false); setErr(null); setSearched(false);
+    setColleges([]); setTotal(null); setHasMore(false); setErr(null); setSearched(false); setPage(0);
+    clearPersisted();
   };
 
   return (
@@ -97,8 +124,9 @@ function AllColleges({ profile, onOpen, savedIds, onToggleSave }) {
             {[20, 25, 50].map((n) => <option key={n} value={n}>{n} per page</option>)}
           </select>
           <button className="btn primary sm" onClick={() => run(0)}>Search</button>
-          <button className="btn ghost sm" onClick={reset}>Reset</button>
+          <ClearSearchButton onClear={reset} label="Clear search" />
         </div>
+        <RestoredNote restoredFrom={restoredFrom} />
       </div>
 
       {loading && !colleges.length && <div className="card pad"><Spinner label="Searching College Scorecard…" /></div>}

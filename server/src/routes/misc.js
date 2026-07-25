@@ -301,6 +301,83 @@ studentRouter.get("/:id/list", (req, res) => {
   res.json({ list: rows });
 });
 
+// POST /api/students/:id/list/evaluate { profile } -- "Evaluate Against My
+// Profile" (Issue 2). Re-scores every college already on My List against the
+// CURRENT profile, using the exact same scoreCollege()/classify() every other
+// save flow uses -- no new formula, no new admissions-category logic. Only
+// the score-derived columns are touched (category, range, overall/academic/
+// career/financial fit, updated_at); everything else on the row -- source
+// context(s), imported-list provenance, double-major pathway/verification
+// status, decision status, notes -- is left exactly as it was. Matching
+// Decision Plan items get their admission_category refreshed too (mirroring
+// what already happens when a college is first added from My List), but
+// their family-entered decision_status, notes, major_risk, cost_risk,
+// program_verification_status, and action_needed are left untouched --
+// there is no existing formula that derives those from scoreCollege() alone,
+// and inventing one here would be new classification logic this app doesn't do.
+const updateListScoreStmt = db.prepare(`
+  UPDATE student_college_list
+  SET category=@category, admission_probability_range=@range, overall_fit_score=@overall,
+      academic_fit_score=@academic, career_fit_score=@career, financial_fit_score=@financial,
+      updated_at=@updated_at
+  WHERE student_id=@student_id AND college_id=@college_id
+`);
+const updatePlanCategoryStmt = db.prepare(
+  "UPDATE decision_plan_items SET admission_category=@category, updated_at=@updated_at WHERE student_id=@student_id AND college_id=@college_id"
+);
+
+studentRouter.post("/:id/list/evaluate", async (req, res) => {
+  const studentId = req.params.id;
+  const profile = req.body?.profile || {};
+  const rows = db.prepare("SELECT * FROM student_college_list WHERE student_id=?").all(studentId);
+  if (!rows.length) return res.json({ updated: 0, needsReview: 0, missingAdmissions: 0, missingCost: 0, programVerificationNeeded: 0, list: [] });
+
+  const scoringProfile = importScoringProfile(profile);
+  const planItems = db.prepare("SELECT college_id, program_verification_status FROM decision_plan_items WHERE student_id=?").all(studentId);
+  const planByCollege = new Map(planItems.map((p) => [p.college_id, p]));
+
+  let updated = 0, needsReview = 0, missingAdmissions = 0, missingCost = 0, programVerificationNeeded = 0;
+  const now = Date.now();
+
+  for (const row of rows) {
+    let college = null;
+    try {
+      const found = await getCollegeById(row.college_id);
+      college = found?.college || null;
+    } catch { college = null; }
+
+    if (!college) {
+      // Can't re-check this college right now (removed from Scorecard, or a
+      // live-lookup failure) -- leave its existing score/category untouched
+      // rather than guessing, and flag it for the family to look at.
+      needsReview++;
+      const plan = planByCollege.get(row.college_id);
+      if (plan && !["Official source verified", "User verified"].includes(plan.program_verification_status)) programVerificationNeeded++;
+      continue;
+    }
+
+    const scored = scoreCollege(scoringProfile, college);
+    const category = scored?.admission?.category || null;
+    updateListScoreStmt.run({
+      student_id: studentId, college_id: row.college_id,
+      category, range: scored?.admission?.range || null, overall: scored?.overall ?? null,
+      academic: scored?.subs?.academic ?? null, career: scored?.subs?.career ?? null, financial: scored?.subs?.financial ?? null,
+      updated_at: now,
+    });
+    if (planByCollege.has(row.college_id)) {
+      updatePlanCategoryStmt.run({ student_id: studentId, college_id: row.college_id, category, updated_at: now });
+    }
+    updated++;
+    if (!category || category === "Insufficient Data") missingAdmissions++;
+    if (college.averageNetPrice == null && college.tuitionInState == null) missingCost++;
+    const plan = planByCollege.get(row.college_id);
+    if (plan && !["Official source verified", "User verified"].includes(plan.program_verification_status)) programVerificationNeeded++;
+  }
+
+  const list = db.prepare("SELECT * FROM student_college_list WHERE student_id=?").all(studentId);
+  res.json({ updated, needsReview, missingAdmissions, missingCost, programVerificationNeeded, list });
+});
+
 // GET /api/students/:id/strategy  -> application strategy from saved list
 studentRouter.post("/:id/strategy", (req, res) => {
   const rows = db.prepare("SELECT * FROM student_college_list WHERE student_id = ?").all(req.params.id);
@@ -351,6 +428,47 @@ studentRouter.put("/:id/double-major-verifications/:verificationId", (req, res) 
 
 studentRouter.delete("/:id/double-major-verifications/:verificationId", (req, res) => {
   deleteDoubleMajorVerification(req.params.id, req.params.verificationId);
+  res.json({ ok: true });
+});
+
+// ---------- Search/results persistence (Issue 1) ----------
+// One JSON "state" blob per (student, page_key). The client fully owns the
+// shape of state -- these routes just store/return it, isolated by Firebase
+// UID via the studentRouter.param("id", ...) override above (same guarantee
+// every other student-scoped route in this file relies on). Nothing here
+// reads or interprets search results, so it can never go stale relative to
+// what a page actually needs, and it can never leak into scoring/matching --
+// it is purely "what was on screen last."
+const upsertSearchState = db.prepare(`
+  INSERT INTO saved_search_sessions (id, student_id, page_key, state_json, created_at, updated_at, last_viewed_at)
+  VALUES (@id, @student_id, @page_key, @state_json, @now, @now, @now)
+  ON CONFLICT(student_id, page_key) DO UPDATE SET
+    state_json = excluded.state_json, updated_at = excluded.updated_at, last_viewed_at = excluded.last_viewed_at
+`);
+const getSearchStateStmt = db.prepare("SELECT * FROM saved_search_sessions WHERE student_id=? AND page_key=?");
+const deleteSearchStateStmt = db.prepare("DELETE FROM saved_search_sessions WHERE student_id=? AND page_key=?");
+
+studentRouter.get("/:id/search-state/:pageKey", (req, res) => {
+  const row = getSearchStateStmt.get(req.params.id, req.params.pageKey);
+  if (!row) return res.json({ state: null, updatedAt: null });
+  let state = null;
+  try { state = JSON.parse(row.state_json); } catch { state = null; }
+  res.json({ state, updatedAt: row.updated_at });
+});
+
+studentRouter.put("/:id/search-state/:pageKey", (req, res) => {
+  const state = (req.body && Object.prototype.hasOwnProperty.call(req.body, "state")) ? req.body.state : null;
+  const now = Date.now();
+  upsertSearchState.run({
+    id: `sss_${req.params.id}_${req.params.pageKey}`, // deterministic -- one row per (student, page)
+    student_id: req.params.id, page_key: req.params.pageKey,
+    state_json: JSON.stringify(state ?? null), now,
+  });
+  res.json({ ok: true });
+});
+
+studentRouter.delete("/:id/search-state/:pageKey", (req, res) => {
+  deleteSearchStateStmt.run(req.params.id, req.params.pageKey);
   res.json({ ok: true });
 });
 

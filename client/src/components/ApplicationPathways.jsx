@@ -13,7 +13,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SourceBadge, InlineSpinner } from "./ui.jsx";
+import { SourceBadge, InlineSpinner, RestoredNote } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 async function authHeader() {
   try {
@@ -386,6 +387,18 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
   const [populateAllResult, setPopulateAllResult] = useState(null);
   const timelineSectionRef = useRef(null);
 
+  // Issue 1: persist the selected Application Timeline college and the two
+  // reference-panel toggles (Application Pathways + Application Timeline
+  // share this one page). Restoring timelineCollegeId re-triggers the
+  // summary fetch effect below automatically.
+  const pathwaysSnapshot = { timelineCollegeId, showPlatformRef, showRegion };
+  const { restoredFrom: pathwaysRestoredFrom } = usePersistedSearch(studentId, "applicationPathways", pathwaysSnapshot, (r) => {
+    if (!r) return;
+    if (!focusCollegeId && r.timelineCollegeId !== undefined) setTimelineCollegeId(r.timelineCollegeId);
+    if (r.showPlatformRef !== undefined) setShowPlatformRef(r.showPlatformRef);
+    if (r.showRegion !== undefined) setShowRegion(r.showRegion);
+  });
+
   useEffect(() => { api.timelineMeta(studentId).then(setTimelineMeta).catch(() => {}); }, [studentId]);
 
   // "View timeline →" from Decision Plan (or any other tab) pre-selects the
@@ -602,6 +615,7 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
           <option value="">Choose a saved college...</option>
           {(saved || []).map((s) => <option key={s.college_id} value={s.college_id}>{s.college_name || collegeNames?.[s.college_id] || s.college_id}</option>)}
         </select>
+        <RestoredNote restoredFrom={pathwaysRestoredFrom} />
 
         {!timelineCollegeId ? (
           <div className="empty" style={{ marginTop: 10 }}>Choose a college above to see or build its application timeline.</div>

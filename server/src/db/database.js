@@ -484,6 +484,23 @@ CREATE TABLE IF NOT EXISTS double_major_verifications (
 );
 CREATE INDEX IF NOT EXISTS idx_dmv_student ON double_major_verifications(student_id);
 CREATE INDEX IF NOT EXISTS idx_dmv_college ON double_major_verifications(student_id, college_id);
+-- Search/results persistence (Issue 1): one JSON "state" blob per student per
+-- page area (Browse Colleges, Matches, Single/Double Major Search, Programs,
+-- Essay Center, etc.). The client owns the shape of state_json entirely --
+-- this table never interprets it, so it can never drift out of sync with
+-- what each page actually needs to restore. Isolated by student_id (Firebase
+-- UID) exactly like every other per-student table in this app.
+CREATE TABLE IF NOT EXISTS saved_search_sessions (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL,
+  page_key TEXT NOT NULL,
+  state_json TEXT,
+  created_at INTEGER,
+  updated_at INTEGER,
+  last_viewed_at INTEGER,
+  UNIQUE(student_id, page_key)
+);
+CREATE INDEX IF NOT EXISTS idx_sss_student ON saved_search_sessions(student_id);
 `);
 
 const getCacheStmt = db.prepare("SELECT payload, fetched_at FROM api_cache WHERE cache_key = ?");

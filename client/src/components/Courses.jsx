@@ -3,7 +3,8 @@
 // dual-degrees for seeded colleges.
 import React, { useState, useEffect } from "react";
 import { api } from "../lib/api.js";
-import { SourceBadge, Spinner, ErrorNote } from "./ui.jsx";
+import { SourceBadge, Spinner, ErrorNote, RestoredNote, ClearSearchButton } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 export function Courses({ onOpen, studentId, profile, initialTrackId }) {
   const [tab, setTab] = useState(initialTrackId ? "track" : "college"); // "college" | "track"
@@ -17,6 +18,22 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
   const [programs, setPrograms] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
+
+  // Issue 1: keep the searched college name, results, picked college, and
+  // its loaded programs on screen across navigation/refresh/logout-login.
+  const coursesSnapshot = { tab, q, results, selected, programs };
+  const { restoredFrom, clear: clearCoursesPersisted } = usePersistedSearch(studentId, "courses", coursesSnapshot, (r) => {
+    if (!r) return;
+    if (!initialTrackId && r.tab) setTab(r.tab);
+    if (r.q !== undefined) setQ(r.q);
+    if (r.results !== undefined) setResults(r.results);
+    if (r.selected !== undefined) setSelected(r.selected);
+    if (r.programs !== undefined) setPrograms(r.programs);
+  });
+  const clearCoursesSearch = () => {
+    setQ(""); setResults([]); setSelected(null); setPrograms(null); setErr(null);
+    clearCoursesPersisted();
+  };
 
   const search = async () => {
     if (!q.trim()) return;
@@ -63,7 +80,9 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
           <input className="inp" value={q} onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && search()} placeholder="e.g. Georgia Tech, MIT, Rutgers" />
           <button className="btn primary" onClick={search} disabled={searching}>Search</button>
+          <ClearSearchButton onClear={clearCoursesSearch} label="Clear search" />
         </div>
+        <RestoredNote restoredFrom={restoredFrom} />
       </div>
 
       {searching && <div className="card pad"><Spinner label="Searching colleges…" /></div>}
@@ -180,6 +199,11 @@ function TrackPlans({ studentId, profile, initialTrackId }) {
   // A newly-passed track id (from Advisor's "See course & prep plan") should
   // take over the selection even if one was already showing.
   useEffect(() => { if (initialTrackId) setTrackId(initialTrackId); }, [initialTrackId]);
+
+  // Issue 1: persist the selected career track so it survives navigation.
+  usePersistedSearch(studentId, "courses:track", { trackId }, (r) => {
+    if (!initialTrackId && r && r.trackId !== undefined) setTrackId(r.trackId);
+  });
 
   const plan = plans.find((p) => p.track_id === trackId) || null;
 

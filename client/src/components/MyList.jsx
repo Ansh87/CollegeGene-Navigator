@@ -6,7 +6,7 @@ import { SavedList } from "./SavedList.jsx";
 import { Compare } from "./Compare.jsx";
 import { ImportColleges } from "./ImportColleges.jsx";
 
-export function MyList({ studentId, saved, profile, onOpen, onRemove, onClearAll, onImported }) {
+export function MyList({ studentId, saved, profile, onOpen, onRemove, onClearAll, onImported, onEvaluated }) {
   const [sub, setSub] = useState("list");
   const canCompare = saved.length >= 2;
 
@@ -27,7 +27,10 @@ export function MyList({ studentId, saved, profile, onOpen, onRemove, onClearAll
         {!canCompare && sub !== "import" && <span className="note" style={{ color: "var(--muted)" }}>Save 2+ colleges to compare them side by side.</span>}
       </div>
 
-      {sub === "list" && <SavedList studentId={studentId} saved={saved} onOpen={onOpen} onRemove={onRemove} onClearAll={onClearAll} />}
+      {sub === "list" && (
+        <SavedList studentId={studentId} saved={saved} profile={profile} onOpen={onOpen} onRemove={onRemove}
+          onClearAll={onClearAll} onEvaluated={onEvaluated} />
+      )}
       {sub === "import" && (
         <ImportColleges studentId={studentId} profile={profile} saved={saved}
           onImported={() => { onImported && onImported(); setSub("list"); }} />

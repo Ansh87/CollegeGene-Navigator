@@ -2,8 +2,9 @@
 // signal, and outlook.
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../lib/api.js";
-import { Spinner, InlineSpinner, SourceBadge, SuccessNote, fmtUSD, fmtPct } from "./ui.jsx";
+import { Spinner, InlineSpinner, SourceBadge, SuccessNote, RestoredNote, ClearSearchButton, fmtUSD, fmtPct } from "./ui.jsx";
 import { US_STATES } from "../lib/states.js";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 const PROGRAM_TYPES = ["Major", "Minor", "Concentration", "Track", "Certificate", "Course cluster", "Graduate-only program", "Unknown"];
 const POLICY_TYPES = ["Double major", "Second major", "Additional major", "Dual degree", "Intercollege dual degree", "Major + minor", "Concentration only", "Not allowed", "Unknown"];
@@ -43,6 +44,32 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
   const [displayCount, setDisplayCount] = useState(20);
   const searchRef = useRef(null);
 
+  // Issue 1: Single Major Search and Double Major Search share this page --
+  // persist the search text(es), state filter, combo mode, sort, deep-search
+  // flag, results, and Top20/30/50 + Load Next 25 display count so returning
+  // to Majors (or refreshing, or logging back in) restores exactly what was
+  // there. Restoring never re-runs or re-scores the search -- it just puts
+  // the previous results back on screen.
+  const majorsSnapshot = {
+    majorQuery, major2Query, stateFilter, majorColleges, comboMode, searchMeta,
+    searchSuccessMsg, tab, majorSort, deepSearch, displayCount,
+  };
+  const { restoredFrom, clear: clearMajorsPersisted } = usePersistedSearch(studentId, "majors", majorsSnapshot, (r) => {
+    if (!r) return;
+    prefilled.current = true; // a restored search always wins over the profile-based prefill
+    if (r.majorQuery !== undefined) setMajorQuery(r.majorQuery);
+    if (r.major2Query !== undefined) setMajor2Query(r.major2Query);
+    if (r.stateFilter !== undefined) setStateFilter(r.stateFilter);
+    if (r.majorColleges !== undefined) setMajorColleges(r.majorColleges);
+    if (r.comboMode !== undefined) setComboMode(r.comboMode);
+    if (r.searchMeta !== undefined) setSearchMeta(r.searchMeta);
+    if (r.searchSuccessMsg !== undefined) setSearchSuccessMsg(r.searchSuccessMsg);
+    if (r.tab) setTab(r.tab);
+    if (r.majorSort) setMajorSort(r.majorSort);
+    if (r.deepSearch !== undefined) setDeepSearch(r.deepSearch);
+    if (r.displayCount) setDisplayCount(r.displayCount);
+  });
+
   // Official double-major confirmation records for this family (see
   // services/doubleMajorVerification.js). Loaded once and reused to (a)
   // classify search results into Confirmed/Related/Needs-Verification
@@ -74,6 +101,7 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
     setMajorQuery(""); setMajor2Query(""); setStateFilter("");
     setComboMode(false); setMajorColleges(null); setSearchMeta(null); setMajorSearchError(null);
     setSearchSuccessMsg(null); setDisplayCount(20); setDeepSearch(false);
+    clearMajorsPersisted();
   };
 
   // Pick a combo -> jump to the search box so the user sees what was selected.
@@ -196,9 +224,10 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
           <div className="row" style={{ gap: 6 }}>
             <span className={`chip ${!comboMode ? "on" : ""}`} onClick={() => setComboMode(false)}>Single major</span>
             <span className={`chip ${comboMode ? "on" : ""}`} onClick={() => setComboMode(true)}>Double major</span>
-            <button className="btn ghost sm" onClick={resetSearch}>Reset</button>
+            <ClearSearchButton onClear={resetSearch} label="Clear search" />
           </div>
         </div>
+        <RestoredNote restoredFrom={restoredFrom} />
         {comboMode && (
           <div className="disclaimer" style={{ marginTop: 8, marginBottom: 0 }}>
             Do not assume a double major is possible just because a college offers both fields separately. Colleges

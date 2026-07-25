@@ -4,14 +4,22 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { Spinner, CategoryTag, SourceBadge, fmtUSD, fmtPct } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 const SIZES = [10, 20, 30, 50];
 
-export function TopList({ kind, title, blurb, profile, onOpen, savedIds, onToggleSave }) {
+export function TopList({ kind, title, blurb, profile, onOpen, savedIds, onToggleSave, studentId }) {
   const [data, setData] = useState(null);
   const [limit, setLimit] = useState(30);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+
+  // Persist the Top 10/20/30/50 size per list (STEM/Finance/Business) -- the
+  // list itself always re-fetches live (it's not a saved result set), but
+  // the family's chosen size shouldn't reset every time they navigate back.
+  usePersistedSearch(studentId, `topList:${kind}`, { limit }, (r) => {
+    if (r && r.limit) setLimit(r.limit);
+  });
 
   useEffect(() => {
     let cancelled = false;

@@ -6,7 +6,8 @@
 // a new formula.
 import React, { useState, useRef } from "react";
 import { api } from "../lib/api.js";
-import { Spinner, InlineSpinner, SuccessNote } from "./ui.jsx";
+import { Spinner, InlineSpinner, SuccessNote, RestoredNote } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 const CONFIDENCE_COLOR = {
   "High confidence": "var(--safety-b)",
@@ -68,6 +69,21 @@ export function ImportColleges({ studentId, profile, saved, onImported }) {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState(null);
   const [summaryResult, setSummaryResult] = useState(null);
+
+  // Issue 1: keep an in-progress review (pasted text, matched rows, batch id,
+  // which step the family is on) if they navigate away and come back, rather
+  // than losing the whole review and having to re-paste/re-match. Never
+  // writes anything to My List by itself -- that still only happens when the
+  // family explicitly confirms, exactly as before.
+  const importSnapshot = { step, pasteText, batchId, rows, summaryResult };
+  const { restoredFrom, clear } = usePersistedSearch(studentId, "importColleges", importSnapshot, (r) => {
+    if (!r) return;
+    if (r.step) setStep(r.step);
+    if (r.pasteText !== undefined) setPasteText(r.pasteText);
+    if (r.batchId !== undefined) setBatchId(r.batchId);
+    if (r.rows !== undefined) setRows(r.rows);
+    if (r.summaryResult !== undefined) setSummaryResult(r.summaryResult);
+  });
 
   const savedIds = new Set((saved || []).map((s) => s.college_id));
 
@@ -167,6 +183,7 @@ export function ImportColleges({ studentId, profile, saved, onImported }) {
     setStep("input"); setPasteText(""); setRows([]); setBatchId(null);
     setSummaryResult(null); setParseError(null); setMatchError(null); setConfirmError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    clear();
   };
 
   return (
@@ -178,6 +195,7 @@ export function ImportColleges({ studentId, profile, saved, onImported }) {
           show you a review screen, and only add the ones you confirm — colleges we're not confident about are
           never added automatically.
         </p>
+        <RestoredNote restoredFrom={restoredFrom} />
       </div>
 
       {step === "input" && (

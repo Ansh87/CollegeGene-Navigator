@@ -7,7 +7,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SetupPlanningButton, InlineSpinner } from "./ui.jsx";
+import { SetupPlanningButton, InlineSpinner, RestoredNote } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 const CATEGORY_OPTS = ["", "Dream / Lottery", "Reach", "Target", "Safety", "Financial Safety", "In-state Anchor"];
 const DECISION_OPTS = ["Keep", "Maybe", "Remove", "Need to verify", "Applied", "Accepted", "Rejected", "Waitlisted"];
@@ -43,6 +44,15 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
   const [notesByItem, setNotesByItem] = useState({});
   const [addCollegeId, setAddCollegeId] = useState("");
   const [listFilter, setListFilter] = useState({ status: "", category: "" });
+
+  // Issue 1: keep the selected Decision Plan sub-tab and Final List filters
+  // (status/category) across navigation, refresh, and logout/login.
+  const decisionPlanSnapshot = { sub, listFilter };
+  const { restoredFrom: dpRestoredFrom } = usePersistedSearch(studentId, "decisionPlan", decisionPlanSnapshot, (r) => {
+    if (!r) return;
+    if (r.sub) setSub(r.sub);
+    if (r.listFilter !== undefined) setListFilter(r.listFilter);
+  });
   // Read-only cross-reference to the Applications tab's day-to-day tracker
   // (essays, recommendations, submitted status), keyed by college_id.
   const [trackerByCollege, setTrackerByCollege] = useState({});
@@ -279,6 +289,7 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
       <VerificationCenterPanel studentId={studentId} refreshKey={items.length} onGo={onGo} />
 
       <Sub tabs={[["list", "Final List"], ["course", "Course & Prep Plans"], ["tasks", "Timeline & Tasks"]]} value={sub} onChange={setSub} />
+      <RestoredNote restoredFrom={dpRestoredFrom} />
 
       {sub === "list" && (
         <div className="stack">
@@ -675,6 +686,13 @@ function VerificationCenterPanel({ studentId, refreshKey, onGo }) {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [expanded, setExpanded] = useState(false);
 
+  // Issue 1: keep the priority filter and expand/collapse state.
+  const { restoredFrom: vcRestoredFrom } = usePersistedSearch(studentId, "verificationCenter", { priorityFilter, expanded }, (r) => {
+    if (!r) return;
+    if (r.priorityFilter !== undefined) setPriorityFilter(r.priorityFilter);
+    if (r.expanded !== undefined) setExpanded(r.expanded);
+  });
+
   useEffect(() => {
     api.verificationCenter(studentId).then(setData).catch(() => setData(null));
   }, [studentId, refreshKey]);
@@ -718,6 +736,7 @@ function VerificationCenterPanel({ studentId, refreshKey, onGo }) {
         </div>
       </div>
       <p className="note">Everything below still needs a source checked, a conflict resolved, or a family decision made -- nothing here is hidden or assumed.</p>
+      <RestoredNote restoredFrom={vcRestoredFrom} />
       <div className="row wrap" style={{ gap: 6 }}>
         {["High", "Medium", "Low"].map((p) => (
           <button key={p} className={`btn sm ${priorityFilter === p ? "primary" : "ghost"}`} onClick={() => setPriorityFilter(priorityFilter === p ? "" : p)}>

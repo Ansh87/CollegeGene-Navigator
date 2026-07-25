@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api.js";
 import { MatchCard } from "./MatchCard.jsx";
-import { Spinner, ErrorNote } from "./ui.jsx";
+import { Spinner, ErrorNote, RestoredNote } from "./ui.jsx";
+import { usePersistedSearch } from "../lib/persistedSearch.js";
 
 const SIZES = [10, 20, 30];
 const CATS = ["Reach", "Target", "Safety"];
@@ -70,6 +71,26 @@ export function Matches({
   const [scenBestFit, setScenBestFit] = useState(null);
   const [bfLoading, setBfLoading] = useState(false);
   const [bfErr, setBfErr] = useState(null);
+
+  // Issue 1: persist which tab (Balanced List / Best Fit), size, filters,
+  // sort, and scenario/track selection were last chosen, so returning to
+  // Matches (or refreshing, or logging back in) restores the same view
+  // instead of resetting to defaults. This restores the SELECTION only --
+  // the balanced/best-fit result effects below already re-fetch live from
+  // the restored selection, using the exact same scoring/ranking as always.
+  const matchesSnapshot = { tab, size, cat, control, stateFilter, sort, scenarioId, matchingBasis, includeServiceAcademies };
+  const { restoredFrom } = usePersistedSearch(studentId, "matches", matchesSnapshot, (r) => {
+    if (!r) return;
+    if (r.tab) setTab(r.tab);
+    if (r.size) setSize(r.size);
+    if (r.cat) setCat(r.cat);
+    if (r.control) setControl(r.control);
+    if (r.stateFilter !== undefined) setStateFilter(r.stateFilter);
+    if (r.sort) setSort(r.sort);
+    if (r.scenarioId !== undefined) setScenarioId(r.scenarioId);
+    if (r.matchingBasis) setMatchingBasis(r.matchingBasis);
+    if (r.includeServiceAcademies !== undefined) setIncludeServiceAcademies(r.includeServiceAcademies);
+  });
 
   // Load the scenario catalog once. Default scenario precedence:
   //   1. the student's saved preferred track (profile.preferredScenarioId)
@@ -271,6 +292,7 @@ export function Matches({
         <button className={`btn sm ${tab === "balanced" ? "primary" : "ghost"}`} onClick={() => setTab("balanced")}>Balanced List</button>
         <button className={`btn sm ${tab === "bestfit" ? "primary" : "ghost"}`} onClick={() => setTab("bestfit")}>Best Fit</button>
       </div>
+      <RestoredNote restoredFrom={restoredFrom} />
 
       {matchingBasis && (
         <div className="card pad" style={{ padding: "10px 12px" }}>
