@@ -447,6 +447,43 @@ CREATE TABLE IF NOT EXISTS college_application_timeline_events (
 );
 CREATE INDEX IF NOT EXISTS idx_timeline_events_student ON college_application_timeline_events(student_id);
 CREATE INDEX IF NOT EXISTS idx_timeline_events_college ON college_application_timeline_events(student_id, college_id);
+
+-- ============================================================================
+-- Double-major OFFICIAL confirmation layer. Categorically distinct from the
+-- primary_major/secondary_major/double_major_status columns on
+-- student_college_list and decision_plan_items above: those columns only ever
+-- reflect what College Scorecard's field-of-study data suggests (two program
+-- areas exist), which can NEVER by itself confirm a college's real
+-- double-major/second-major/dual-degree policy. A row here represents the
+-- family (or an official-source citation) actually confirming that policy --
+-- see services/doubleMajorVerification.js for the exact "confirmed" gate.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS double_major_verifications (
+  verification_id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL,
+  college_id TEXT,
+  college_name TEXT,
+  primary_program_requested TEXT,
+  secondary_program_requested TEXT,
+  primary_official_program_name TEXT,
+  secondary_official_program_name TEXT,
+  primary_program_type TEXT DEFAULT 'Unknown',
+  secondary_program_type TEXT DEFAULT 'Unknown',
+  official_policy_name TEXT,
+  double_major_policy_type TEXT DEFAULT 'Unknown',
+  double_major_allowed_status TEXT DEFAULT 'Unknown',
+  source_url TEXT,
+  source_label TEXT,
+  source_type TEXT,
+  last_checked TEXT,
+  verification_status TEXT NOT NULL DEFAULT 'Needs manual verification',
+  restrictions TEXT,
+  notes TEXT,
+  created_at INTEGER,
+  updated_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_dmv_student ON double_major_verifications(student_id);
+CREATE INDEX IF NOT EXISTS idx_dmv_college ON double_major_verifications(student_id, college_id);
 `);
 
 const getCacheStmt = db.prepare("SELECT payload, fetched_at FROM api_cache WHERE cache_key = ?");

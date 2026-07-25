@@ -412,16 +412,55 @@ function csvEscape(v) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// Feature 9: look up the official double-major verification record (if any)
+// for a given college + primary/secondary pairing, for CSV export only. Never
+// falls back to Scorecard-tier fields -- an export cell is either the real
+// official value or blank, never a guess.
+function lookupDmVerification(studentId, collegeId, primaryMajor, secondaryMajor) {
+  if (!collegeId || !primaryMajor || !secondaryMajor) return null;
+  return db.prepare(
+    "SELECT * FROM double_major_verifications WHERE student_id=? AND college_id=? AND LOWER(primary_program_requested)=LOWER(?) AND LOWER(secondary_program_requested)=LOWER(?)"
+  ).get(studentId, collegeId, primaryMajor, secondaryMajor) || null;
+}
+const DM_EXPORT_HEADERS = [
+  "Primary program requested", "Secondary program requested",
+  "Primary official program name", "Secondary official program name",
+  "Primary program type", "Secondary program type",
+  "Double-major policy type", "Double-major allowed status",
+  "Double-major source URL", "Double-major last checked", "Double-major verification status",
+];
+function dmExportCells(v, primaryMajor, secondaryMajor) {
+  return [
+    primaryMajor || "", secondaryMajor || "",
+    v?.primary_official_program_name || "", v?.secondary_official_program_name || "",
+    v?.primary_program_type || "", v?.secondary_program_type || "",
+    v?.double_major_policy_type || "", v?.double_major_allowed_status || "",
+    v?.source_url || "", v?.last_checked || "", v?.verification_status || "",
+  ];
+}
+
 // Verification Center CSV export -- same shape as the on-screen list, one
 // row per unresolved item, so a family can share/print the full to-do list.
+const DM_ISSUE_TYPES = new Set([
+  "Double-major rules needing verification", "Verify primary major official name",
+  "Verify second program official name", "Verify second program type (major, minor, concentration, certificate, or track)",
+  "Verify school-to-school restrictions", "Verify direct-admit restrictions",
+]);
 decisionPlanRouter.get("/:id/verification-center/export.csv", (req, res) => {
   const vc = buildVerificationCenter(req.params.id);
-  const headers = ["College", "Program/Track", "Issue type", "Status", "Priority", "Action needed", "Source URL", "Last checked"];
+  const headers = ["College", "Program/Track", "Issue type", "Status", "Priority", "Action needed", "Source URL", "Last checked", ...DM_EXPORT_HEADERS];
   const lines = [headers.join(",")];
   for (const it of vc.items) {
+    let dmCells = ["", "", "", "", "", "", "", "", "", "", ""];
+    if (it.collegeId && it.programOrTrack && DM_ISSUE_TYPES.has(it.issueType) && it.programOrTrack.includes(" + ")) {
+      const [primaryMajor, secondaryMajor] = it.programOrTrack.split(" + ").map((s) => s.trim());
+      const v = lookupDmVerification(req.params.id, it.collegeId, primaryMajor, secondaryMajor);
+      dmCells = dmExportCells(v, primaryMajor, secondaryMajor);
+    }
     lines.push([
       it.college, it.programOrTrack || "", it.issueType, it.status, it.priority, it.actionNeeded,
       it.sourceUrl || "", it.lastChecked ? new Date(it.lastChecked).toISOString().slice(0, 10) : "",
+      ...dmCells,
     ].map(csvEscape).join(","));
   }
   res.setHeader("Content-Type", "text/csv");
@@ -471,6 +510,7 @@ decisionPlanRouter.get("/:id/export.csv", (req, res) => {
     "Essays not started", "Special/honors essays", "Essay prompt cycle/year(s)",
     "Application Timeline: earliest deadline", "Application Timeline: round", "Application Timeline: verification status",
     "Source context", "Primary major", "Secondary major", "Double-major status", "Double-major verification status",
+    ...DM_EXPORT_HEADERS,
     "Action needed", "Notes", "Source URLs",
   ];
   const lines = [headers.join(",")];
@@ -485,6 +525,7 @@ decisionPlanRouter.get("/:id/export.csv", (req, res) => {
     const es = it.college_id ? essayByCollege[it.college_id] : null;
     const tl = it.college_id ? timelineByCollege[it.college_id] : null;
     const earliestDeadline = pw ? (pw.ea_deadline || pw.ed_deadline || pw.rea_scea_deadline || pw.priority_deadline || pw.rd_deadline || pw.rolling_deadline || "") : "";
+    const dmVer = lookupDmVerification(req.params.id, it.college_id, it.primary_major, it.secondary_major);
     lines.push([
       it.college_name, it.program_name, specialPrograms.join("; "), it.career_track, it.admission_category,
       it.program_verification_status, it.major_risk, it.cost_risk, it.application_round, it.decision_status,
@@ -492,6 +533,7 @@ decisionPlanRouter.get("/:id/export.csv", (req, res) => {
       es?.total ?? 0, es?.notStarted ?? 0, es?.special ?? 0, es ? [...es.cycles].join("; ") : "",
       tl ? `${tl.event_label || tl.event_type}: ${tl.event_date}` : "", tl?.application_round || "", tl?.verification_status || "",
       it.source_context, it.primary_major, it.secondary_major, it.double_major_status, it.double_major_verification_status,
+      ...dmExportCells(dmVer, it.primary_major, it.secondary_major),
       it.action_needed, it.notes, sourceUrls,
     ].map(csvEscape).join(","));
   }

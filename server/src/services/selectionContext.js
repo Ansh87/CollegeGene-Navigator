@@ -14,12 +14,17 @@ export const SELECTION_CONTEXTS = [
   "Selected manually",
 ];
 
+// Family-facing status label for a double-major search result / saved
+// pathway. Re-exported from doubleMajorVerification.js (the source of truth)
+// so existing importers of this file don't need to change; kept here too to
+// avoid a circular import between the two service files.
 export const DOUBLE_MAJOR_STATUSES = [
-  "Strong double-major fit",
-  "Possible double-major fit",
+  "Confirmed double-major path",
+  "Confirmed with restrictions",
+  "Programs exist — double-major rules not verified",
+  "Second program is not confirmed as an undergraduate major",
   "Needs official verification",
-  "Weak / uncertain double-major fit",
-  "Not recommended",
+  "Not confirmed",
 ];
 
 export const DOUBLE_MAJOR_VERIFICATION_STATUSES = [

@@ -204,6 +204,26 @@ function guessDepartment(sentences) {
   return null;
 }
 
+// Feature 7 (double-major verification strengthening): when a family
+// researches a college, flag pages whose text mentions double-major-related
+// policy language, as a breadcrumb pointing the family at pages worth
+// checking manually -- this NEVER creates or updates a double_major_
+// verifications record by itself (that would mean guessing which specific
+// major pair the family cares about, and inventing that association would
+// violate the "never invent facts" rule). It only ever adds a note to the
+// discovered_programs record so the family knows to look here.
+const DOUBLE_MAJOR_KEYWORDS = [
+  "double major", "second major", "additional major", "dual degree",
+  "concurrent degree", "intercollege degree", "intercollege transfer",
+  "major declaration", "school-to-school transfer", "school to school transfer",
+  "college restrictions", "school restrictions", "minor", "concentration",
+  "certificate", "track",
+];
+export function findDoubleMajorKeywordEvidence(text) {
+  const hay = String(text || "").toLowerCase();
+  return DOUBLE_MAJOR_KEYWORDS.filter((k) => hay.includes(k));
+}
+
 // Core heuristic extractor shared by Layer 2 (manual URL) and Layer 3 (crawl).
 // Returns a structured record PLUS a confidence_level derived from how many
 // target fields were actually found on the page — never invented.
@@ -225,6 +245,7 @@ export function extractProgramFromHtml(html, url) {
 
   const fieldsFound = [eligibility, whoCanApply, deadlineText, applicationProcess, benefits, requirements].filter(Boolean).length;
   const confidence_level = fieldsFound >= 4 ? "high" : fieldsFound >= 2 ? "medium" : "low";
+  const doubleMajorKeywordHits = findDoubleMajorKeywordEvidence(`${title || ""} ${bodyText.slice(0, 4000)}`);
 
   return {
     title,
@@ -239,6 +260,7 @@ export function extractProgramFromHtml(html, url) {
     requirements,
     confidence_level,
     fieldsFound,
+    doubleMajorKeywordHits,
     sourceUrl: url,
     // First ~3000 chars of visible body text, used only to check for a strong
     // program keyword when deciding whether a crawled page is worth saving —
@@ -524,9 +546,14 @@ function saveExtractedProgram(studentId, { collegeId, collegeName, sourceId, url
     confidence_level: extracted.confidence_level,
     verification_status: "Needs manual verification",
     last_checked: ts,
-    notes: extracted.fieldsFound === 0
-      ? "Automatic extraction found no clearly labeled program fields on this page. Please review the source URL directly and fill in fields manually."
-      : `Automatic extraction found ${extracted.fieldsFound}/6 target fields on this page. Review against the source before treating this as verified.`,
+    notes: [
+      extracted.fieldsFound === 0
+        ? "Automatic extraction found no clearly labeled program fields on this page. Please review the source URL directly and fill in fields manually."
+        : `Automatic extraction found ${extracted.fieldsFound}/6 target fields on this page. Review against the source before treating this as verified.`,
+      extracted.doubleMajorKeywordHits?.length
+        ? `This page mentions double-major-related language (${extracted.doubleMajorKeywordHits.slice(0, 5).join(", ")}). If you're considering a double major here, check this page and confirm the official policy in Double Major Search's "Confirm with an official source" form.`
+        : null,
+    ].filter(Boolean).join(" "),
     action_needed: defaultActionNeeded("Needs manual verification"),
     created_at: ts,
     updated_at: ts,

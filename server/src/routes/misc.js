@@ -9,6 +9,10 @@ import { buildStrategy } from "../services/strategyPlanner.js";
 import { getVerified } from "../services/verified.js";
 import { deriveProfileSignals } from "../services/profileSignals.js";
 import { mergeSelectionContexts, mergeDoubleMajorPathway } from "../services/selectionContext.js";
+import {
+  listDoubleMajorVerifications, createDoubleMajorVerification,
+  updateDoubleMajorVerification, deleteDoubleMajorVerification, isConfirmedDoubleMajor,
+} from "../services/doubleMajorVerification.js";
 
 // ---------- Careers ----------
 export const careersRouter = express.Router();
@@ -280,6 +284,36 @@ studentRouter.put("/:id/list/:collegeId", (req, res) => {
 studentRouter.delete("/:id/list/:collegeId", (req, res) => {
   db.prepare("DELETE FROM student_college_list WHERE student_id=? AND college_id=?")
     .run(req.params.id, req.params.collegeId);
+  res.json({ ok: true });
+});
+
+// ---------- Double-major OFFICIAL verification records ----------
+// The one place a double-major pairing can move from "Scorecard suggests both
+// fields exist" to "an official college source confirms the policy." See
+// services/doubleMajorVerification.js for the field list and the single
+// isConfirmedDoubleMajor() gate every caller (My List badges, Decision Plan,
+// Verification Center) relies on -- nothing here decides "confirmed" on its
+// own.
+studentRouter.get("/:id/double-major-verifications", (req, res) => {
+  const collegeId = req.query.collegeId || null;
+  const rows = listDoubleMajorVerifications(req.params.id, collegeId)
+    .map((v) => ({ ...v, confirmed: isConfirmedDoubleMajor(v) }));
+  res.json({ verifications: rows });
+});
+
+studentRouter.post("/:id/double-major-verifications", (req, res) => {
+  const rec = createDoubleMajorVerification(req.params.id, req.body || {});
+  res.json({ verification: { ...rec, confirmed: isConfirmedDoubleMajor(rec) } });
+});
+
+studentRouter.put("/:id/double-major-verifications/:verificationId", (req, res) => {
+  const rec = updateDoubleMajorVerification(req.params.id, req.params.verificationId, req.body || {});
+  if (!rec) return res.status(404).json({ error: "not_found" });
+  res.json({ verification: { ...rec, confirmed: isConfirmedDoubleMajor(rec) } });
+});
+
+studentRouter.delete("/:id/double-major-verifications/:verificationId", (req, res) => {
+  deleteDoubleMajorVerification(req.params.id, req.params.verificationId);
   res.json({ ok: true });
 });
 

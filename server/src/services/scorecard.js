@@ -4,6 +4,7 @@
 // and is rendered downstream as "Data unavailable".
 import { config } from "../config.js";
 import { cacheGet, cacheSet } from "../db/database.js";
+import { classifyComboEvidence } from "./doubleMajorVerification.js";
 
 const SOURCE = "U.S. Department of Education College Scorecard";
 
@@ -632,18 +633,24 @@ async function fetchComboCandidatePool({ cips1, state = null, control = null, po
 }
 
 // Qualitative double-major evidence label -- NOT a numeric score, and NEVER a
-// claim that a college officially permits a double major (Scorecard cannot
-// confirm that; only the college itself can). Reflects only how solid the
-// underlying program-match evidence is for each field, using the SAME
-// matchType classification matchPrograms() already produces ("exact" vs
-// "related" CIP match). verificationStatus is always "Needs manual
-// verification" here because no official double-major-policy source has been
-// checked -- this is set once, honestly, not computed from a formula.
+// claim that a college officially permits a double major. College Scorecard
+// can only ever show that two program AREAS exist in its field-of-study data;
+// it has no concept of a double-major/second-major/dual-degree POLICY, so
+// this function can never return anything stronger than "programs exist,
+// rules not verified." A pairing only ever earns the stronger "Confirmed
+// double-major path" wording once a family attaches an official source via
+// the double_major_verifications record (see services/doubleMajorVerification.js
+// -- isConfirmedDoubleMajor()); that happens downstream of this shared/cached
+// search, never here. classifyComboEvidence() also looks at the literal CIP
+// title text Scorecard returned for the SECOND major -- this works identically
+// for any major pair (e.g. "Computer Science" + "Artificial Intelligence" is
+// just one example), never a hardcoded major.
 function doubleMajorEvidenceStatus(m1, m2) {
-  const bothExact = m1[0]?.matchType === "exact" && m2[0]?.matchType === "exact";
+  const evidence = classifyComboEvidence(m2[0]?.title);
   return {
-    status: bothExact ? "Possible double-major fit" : "Weak / uncertain double-major fit",
+    status: evidence.status,
     verificationStatus: "Needs manual verification",
+    secondaryProgramTypeHint: evidence.secondaryProgramTypeHint,
   };
 }
 
@@ -683,8 +690,10 @@ export async function searchMajorCombos({ major1, major2 = null, state = null, c
         matchingMajor1Programs: m1, matchingMajor2Programs: m2,
         possibleCombination: true,
         verifiedDoubleMajorPolicy: "unverified",
+        primaryProgramRequested: major1, secondaryProgramRequested: major2,
         doubleMajorStatus: evidence.status,
         doubleMajorVerificationStatus: evidence.verificationStatus,
+        secondaryProgramTypeHint: evidence.secondaryProgramTypeHint,
         doubleMajorLabel: `${major1} + ${major2}`,
         officialProgramSource: "College Scorecard",
         warning: "College Scorecard confirms field/program availability, not whether a formal double major is allowed. Confirm with the college's catalog/advising office.",

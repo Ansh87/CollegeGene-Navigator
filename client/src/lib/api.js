@@ -395,4 +395,21 @@ export const api = {
     afetch(`/api/application-timeline/${id}/setup-planning`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }).then(j),
+
+  // ---------------- Double-major OFFICIAL verification records ----------------
+  // Distinct from Double Major Search results (College Scorecard evidence
+  // only): a record here exists only once a family attaches an official
+  // source confirming the actual double-major/second-major/dual-degree policy.
+  listDoubleMajorVerifications: (id, collegeId) =>
+    afetch(`/api/students/${id}/double-major-verifications${collegeId ? `?collegeId=${encodeURIComponent(collegeId)}` : ""}`).then(j),
+  addDoubleMajorVerification: (id, body) =>
+    afetch(`/api/students/${id}/double-major-verifications`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(j),
+  updateDoubleMajorVerification: (id, verificationId, body) =>
+    afetch(`/api/students/${id}/double-major-verifications/${verificationId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(j),
+  deleteDoubleMajorVerification: (id, verificationId) =>
+    afetch(`/api/students/${id}/double-major-verifications/${verificationId}`, { method: "DELETE" }).then(j),
 };

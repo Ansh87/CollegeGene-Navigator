@@ -1,9 +1,18 @@
 // Majors.jsx — majors that fit the student, with why, careers, grad-school
 // signal, and outlook.
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../lib/api.js";
 import { Spinner, InlineSpinner, SourceBadge, SuccessNote, fmtUSD, fmtPct } from "./ui.jsx";
 import { US_STATES } from "../lib/states.js";
+
+const PROGRAM_TYPES = ["Major", "Minor", "Concentration", "Track", "Certificate", "Course cluster", "Graduate-only program", "Unknown"];
+const POLICY_TYPES = ["Double major", "Second major", "Additional major", "Dual degree", "Intercollege dual degree", "Major + minor", "Concentration only", "Not allowed", "Unknown"];
+const ALLOWED_STATUSES = ["Confirmed allowed", "Confirmed with restrictions", "Confirmed not allowed", "Programs exist, rules not verified", "Second program is not an undergraduate major", "Unknown"];
+const SOURCE_TYPES = ["College catalog", "Undergraduate bulletin", "Registrar page", "Academic advising page", "Department page", "School/college degree requirements page", "Official double-major policy page", "Official program page"];
+const VERIFICATION_STATUSES = ["Official source verified", "User verified", "Needs manual verification"];
+
+const norm = (s) => String(s || "").toLowerCase().trim();
+function verificationKey(collegeId, primary, secondary) { return `${collegeId}::${norm(primary)}::${norm(secondary)}`; }
 
 export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
   const [majors, setMajors] = useState([]);
@@ -33,6 +42,20 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
   // more, without re-running the search or re-scoring anything.
   const [displayCount, setDisplayCount] = useState(20);
   const searchRef = useRef(null);
+
+  // Official double-major confirmation records for this family (see
+  // services/doubleMajorVerification.js). Loaded once and reused to (a)
+  // classify search results into Confirmed/Related/Needs-Verification
+  // sections and (b) power the "Confirmed Double-Major Programs" tab.
+  // Categorically separate from doubleMajorStatus on a raw search result --
+  // that field only ever reflects College Scorecard evidence.
+  const [dmVerifications, setDmVerifications] = useState([]);
+  const refreshVerifications = useCallback(() => {
+    if (!studentId) return;
+    api.listDoubleMajorVerifications(studentId).then((r) => setDmVerifications(r.verifications || [])).catch(() => {});
+  }, [studentId]);
+  useEffect(() => { refreshVerifications(); }, [refreshVerifications]);
+  const dmVerByKey = new Map(dmVerifications.map((v) => [verificationKey(v.college_id, v.primary_program_requested, v.secondary_program_requested), v]));
 
   // Prefill the planner from the Profile's own Primary/Secondary major once,
   // so the double-major planner starts from what the family already told us
@@ -131,6 +154,9 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
         </button>
         <button className={`btn sm ${tab === "recommendations" ? "primary" : "ghost"}`} onClick={() => setTab("recommendations")}>
           Major recommendations for you
+        </button>
+        <button className={`btn sm ${tab === "confirmed" ? "primary" : "ghost"}`} onClick={() => setTab("confirmed")}>
+          Confirmed Double-Major Programs {dmVerifications.filter((v) => v.confirmed).length > 0 ? `(${dmVerifications.filter((v) => v.confirmed).length})` : ""}
         </button>
       </div>
 
@@ -296,10 +322,58 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
                 <div className="note" style={{ fontWeight: 600 }}>
                   Showing 1–{Math.min(displayCount, sortedMajorColleges.length)} of {sortedMajorColleges.length} scored colleges
                 </div>
-                {sortedMajorColleges.slice(0, displayCount).map((c) => (
-                  <MajorCollegeCard key={c.id} c={c} profile={profile} studentId={studentId} searchMeta={searchMeta}
-                    onOpen={onOpen} onToggleSave={onToggleSave} savedIds={savedIds} />
-                ))}
+                {(() => {
+                  const pageSlice = sortedMajorColleges.slice(0, displayCount);
+                  const card = (c) => {
+                    const ver = searchMeta?.combo
+                      ? dmVerByKey.get(verificationKey(c.id, searchMeta.major1, searchMeta.major2))
+                      : null;
+                    return (
+                      <MajorCollegeCard key={c.id} c={c} profile={profile} studentId={studentId} searchMeta={searchMeta}
+                        onOpen={onOpen} onToggleSave={onToggleSave} savedIds={savedIds}
+                        verification={ver} onVerificationSaved={refreshVerifications} />
+                    );
+                  };
+                  if (!searchMeta?.combo) return pageSlice.map(card);
+
+                  // Feature 8: group combo results into three honest tiers instead
+                  // of one undifferentiated list. "Confirmed" only ever comes from
+                  // a matching official-source verification record for THIS exact
+                  // primary+secondary pairing at THIS college -- never from
+                  // Scorecard evidence alone.
+                  const confirmed = [], related = [], needsVerification = [];
+                  for (const c of pageSlice) {
+                    const ver = dmVerByKey.get(verificationKey(c.id, searchMeta.major1, searchMeta.major2));
+                    if (ver?.confirmed) confirmed.push(c);
+                    else if (c.secondaryProgramTypeHint && c.secondaryProgramTypeHint !== "Unknown") related.push(c);
+                    else needsVerification.push(c);
+                  }
+                  return (
+                    <>
+                      {confirmed.length > 0 && (
+                        <div>
+                          <h4 style={{ margin: "6px 0" }}>Confirmed Double-Major Paths ({confirmed.length})</h4>
+                          <p className="note" style={{ marginBottom: 8 }}>An official source confirms both official program names and the double-major/second-major policy at these colleges.</p>
+                          <div className="stack" style={{ gap: 8 }}>{confirmed.map(card)}</div>
+                        </div>
+                      )}
+                      {related.length > 0 && (
+                        <div style={{ marginTop: confirmed.length ? 16 : 0 }}>
+                          <h4 style={{ margin: "6px 0" }}>Related Program Paths ({related.length})</h4>
+                          <p className="note" style={{ marginBottom: 8 }}>These colleges offer the primary major plus a related minor, concentration, certificate, or track in the second field -- not necessarily a second major.</p>
+                          <div className="stack" style={{ gap: 8 }}>{related.map(card)}</div>
+                        </div>
+                      )}
+                      {needsVerification.length > 0 && (
+                        <div style={{ marginTop: (confirmed.length || related.length) ? 16 : 0 }}>
+                          <h4 style={{ margin: "6px 0" }}>Needs Official Verification ({needsVerification.length})</h4>
+                          <p className="note" style={{ marginBottom: 8 }}>College Scorecard data suggests both fields exist, but the double-major policy has not been confirmed with an official source.</p>
+                          <div className="stack" style={{ gap: 8 }}>{needsVerification.map(card)}</div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
                   {displayCount < 30 && sortedMajorColleges.length > displayCount && (
                     <button className="btn ghost sm" onClick={() => setDisplayCount(30)}>Show Top 30</button>
@@ -367,6 +441,62 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
           ))}
         </div>
       ))}
+
+      {tab === "confirmed" && (
+        <ConfirmedDoubleMajorPrograms verifications={dmVerifications} onOpen={onOpen} onRefresh={refreshVerifications} studentId={studentId} />
+      )}
+    </div>
+  );
+}
+
+// Feature 1: the ONE place in the app that only ever shows a double-major
+// pairing once an official source has confirmed BOTH official program names
+// and the actual double-major/second-major/dual-degree policy. Nothing here
+// is derived from College Scorecard -- every row is a double_major_verifications
+// record that passed isConfirmedDoubleMajor() server-side (see the `confirmed`
+// flag the API attaches to every record).
+function ConfirmedDoubleMajorPrograms({ verifications, onOpen, onRefresh, studentId }) {
+  const confirmed = verifications.filter((v) => v.confirmed);
+  if (!studentId) return <div className="empty">Sign in to track officially confirmed double-major programs.</div>;
+  if (!confirmed.length) {
+    return (
+      <div className="card pad">
+        <h3 style={{ marginBottom: 6 }}>Confirmed Double-Major Programs</h3>
+        <p className="note">
+          No college has an official-source-confirmed double major yet. When you search Double Major options and use
+          "Confirm with an official source" on a result, verified pairings will appear here -- and only here, once
+          they've cleared the confirmation bar.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="stack">
+      <div className="card pad">
+        <h3 style={{ marginBottom: 4 }}>Confirmed Double-Major Programs ({confirmed.length})</h3>
+        <p className="note">Every pairing below has an official source URL confirming both official program names and the double-major/second-major/dual-degree policy.</p>
+      </div>
+      {confirmed.map((v) => (
+        <div key={v.verification_id} className="card pad" style={{ background: "var(--paper-2)" }}>
+          <div className="row spread wrap" style={{ alignItems: "flex-start" }}>
+            <strong>{v.college_name || v.college_id}</strong>
+            <span className="pill" style={{ background: "var(--safety-b)" }}>Confirmed double-major path</span>
+          </div>
+          <div className="grid cols-2" style={{ gap: 8, marginTop: 8 }}>
+            <div className="note">Primary official program: <strong>{v.primary_official_program_name}</strong></div>
+            <div className="note">Second official program: <strong>{v.secondary_official_program_name}</strong></div>
+            <div className="note">Policy: {v.official_policy_name} ({v.double_major_policy_type})</div>
+            <div className="note">Status: {v.double_major_allowed_status}</div>
+          </div>
+          <div className="note" style={{ marginTop: 6 }}>
+            Verification: {v.verification_status} · Source: {v.source_url ? <a href={v.source_url} target="_blank" rel="noreferrer">{v.source_label || v.source_url}</a> : "—"} · Last checked: {v.last_checked || "—"}
+          </div>
+          {v.restrictions && <div className="note" style={{ marginTop: 4 }}>Restrictions: {v.restrictions}</div>}
+          <div className="row" style={{ gap: 10, marginTop: 8 }}>
+            {onOpen && v.college_id && <button className="link" onClick={() => onOpen(v.college_id)}>View college →</button>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -374,14 +504,32 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
 // A college card in the Majors search results, with an on-demand
 // "Evaluate against my profile" action (parity with Browse Colleges).
 // Preserves all existing program/combo display; only adds the evaluate control.
-function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleSave, savedIds }) {
+// `verification` (when present) is this family's OWN double_major_verifications
+// record for this exact college + primary/secondary pairing -- categorically
+// different from c.doubleMajorStatus, which only ever reflects Scorecard
+// evidence. See services/doubleMajorVerification.js on the server.
+function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleSave, savedIds, verification, onVerificationSaved }) {
   const [scored, setScored] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
   const [evalErr, setEvalErr] = useState(null);
   const [comboSaveMsg, setComboSaveMsg] = useState(null);
   const [comboSaving, setComboSaving] = useState(false);
   const [listMsg, setListMsg] = useState(null);
+  const [showConfirmForm, setShowConfirmForm] = useState(false);
   const isCombo = !!searchMeta?.combo;
+  const isConfirmed = !!verification?.confirmed;
+
+  // Feature 3/5 display label -- never invents a stronger claim than the
+  // evidence supports. A confirmed verification record always wins; otherwise
+  // fall back to the honest Scorecard-tier label the server already computed
+  // (c.doubleMajorStatus), which is generic across any major pair.
+  const displayStatus = isConfirmed
+    ? (verification.double_major_allowed_status === "Confirmed with restrictions" ? "Confirmed with restrictions" : "Confirmed double-major path")
+    : (c.doubleMajorStatus || "Needs official verification");
+  const hint = c.secondaryProgramTypeHint;
+  const secondaryLine = !isConfirmed && hint && hint !== "Unknown" && searchMeta
+    ? `${searchMeta.major1} major + ${searchMeta.major2} ${hint.toLowerCase()}`
+    : null;
 
   const evaluate = async () => {
     setEvaluating(true); setEvalErr(null);
@@ -401,14 +549,20 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
         careerTrack: profile?.preferredScenarioId || null,
         programVerificationStatus: "Needs manual verification",
         primaryMajor: searchMeta.major1, secondaryMajor: searchMeta.major2,
-        doubleMajorStatus: c.doubleMajorStatus || "Needs official verification",
-        doubleMajorVerificationStatus: c.doubleMajorVerificationStatus || "Needs manual verification",
-        doubleMajorNotes: "Both fields exist here per College Scorecard, but the double-major policy is not yet verified.",
+        doubleMajorStatus: displayStatus,
+        doubleMajorVerificationStatus: isConfirmed ? verification.verification_status : "Needs manual verification",
+        doubleMajorNotes: isConfirmed
+          ? `Official source confirms this pairing: ${verification.official_policy_name || "double-major policy"}.`
+          : "Both fields exist here per College Scorecard, but the double-major policy is not yet verified.",
         sourceContext: "Selected from Double Major Search",
-        notes: `Considering a double major: ${searchMeta.major1} + ${searchMeta.major2}. Both fields exist here per College Scorecard, but the double-major policy is not yet verified -- confirm with the college's advising office.`,
-        actionNeeded: "Verify double-major rules and school-to-school restrictions with the college's advising office or catalog.",
+        notes: isConfirmed
+          ? `Double major: ${searchMeta.major1} + ${searchMeta.major2}. Officially confirmed via ${verification.source_label || verification.source_url}.`
+          : `Considering a double major: ${searchMeta.major1} + ${searchMeta.major2}. Both fields exist here per College Scorecard, but the double-major policy is not yet verified -- confirm with the college's advising office.`,
+        actionNeeded: isConfirmed ? null : "Verify double-major rules and school-to-school restrictions with the college's advising office or catalog.",
       });
-      setComboSaveMsg("Saved to Decision Plan as a double-major consideration. Double-major path needs official verification.");
+      setComboSaveMsg(isConfirmed
+        ? "Saved to Decision Plan as a confirmed double major."
+        : "Saved to Decision Plan as a double-major consideration. Programs exist — double-major rules not verified.");
     } catch (e) {
       setComboSaveMsg(`Could not save: ${e.message}`);
     } finally { setComboSaving(false); }
@@ -428,8 +582,8 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
           context: "Selected from Double Major Search",
           primaryMajor: searchMeta.major1, secondaryMajor: searchMeta.major2,
           doubleMajorLabel: `${searchMeta.major1} + ${searchMeta.major2}`,
-          doubleMajorStatus: c.doubleMajorStatus || "Needs official verification",
-          doubleMajorVerificationStatus: c.doubleMajorVerificationStatus || "Needs manual verification",
+          doubleMajorStatus: displayStatus,
+          doubleMajorVerificationStatus: isConfirmed ? verification.verification_status : "Needs manual verification",
         },
         true // forceAdd -- merge in this pathway, don't toggle off an existing save
       );
@@ -464,11 +618,23 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
         <div style={{ marginTop: 8 }}>
           <div className="row wrap" style={{ gap: 6 }}>
             <span className="pill" style={{ background: "var(--safety-b)" }}>Offers both fields ✓</span>
-            {c.doubleMajorStatus && <span className="pill" style={{ background: "var(--target-b)" }}>{c.doubleMajorStatus}</span>}
+            <span className="pill" style={{ background: isConfirmed ? "var(--safety-b)" : "var(--target-b)" }}>{displayStatus}</span>
           </div>
-          <div className="note" style={{ marginTop: 6, fontWeight: 600, color: "var(--amber)" }}>
-            Double-major path needs official verification.
-          </div>
+          {isConfirmed ? (
+            <div className="note" style={{ marginTop: 6 }}>
+              <strong>Official source confirms this pairing.</strong><br />
+              Primary official program: {verification.primary_official_program_name} · Second official program: {verification.secondary_official_program_name}<br />
+              Policy: {verification.official_policy_name} · Verification: {verification.verification_status}<br />
+              Source: {verification.source_url ? <a href={verification.source_url} target="_blank" rel="noreferrer">{verification.source_label || verification.source_url}</a> : "—"} · Last checked: {verification.last_checked || "—"}
+            </div>
+          ) : (
+            <div className="note" style={{ marginTop: 6, fontWeight: 600, color: "var(--amber)" }}>
+              {secondaryLine
+                ? `${secondaryLine}. ${hint} is not confirmed as a second major.`
+                : "College Scorecard or broad program data suggests related fields exist, but an official double-major policy has not been confirmed."}
+              <div style={{ fontWeight: 400, marginTop: 2 }}>Action needed: verify double-major rules using the college catalog, registrar, advising office, or department page.</div>
+            </div>
+          )}
           <div className="grid cols-2" style={{ gap: 8, marginTop: 8 }}>
             <div>
               <div className="note" style={{ fontWeight: 600 }}>{searchMeta.major1}</div>
@@ -483,6 +649,17 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
               ))}
             </div>
           </div>
+          {studentId && !isConfirmed && (
+            <div style={{ marginTop: 8 }}>
+              {!showConfirmForm ? (
+                <button className="link" onClick={() => setShowConfirmForm(true)}>Confirm with an official source →</button>
+              ) : (
+                <ConfirmDoubleMajorForm studentId={studentId} college={c} searchMeta={searchMeta}
+                  onSaved={() => { setShowConfirmForm(false); onVerificationSaved && onVerificationSaved(); }}
+                  onCancel={() => setShowConfirmForm(false)} />
+              )}
+            </div>
+          )}
         </div>
       )}
       {c.relatedAvailablePrograms && c.relatedAvailablePrograms.length > 0 && (
@@ -529,14 +706,136 @@ function MajorCollegeCard({ c, profile, studentId, searchMeta, onOpen, onToggleS
               context: "Selected from Double Major Search",
               primaryMajor: searchMeta.major1, secondaryMajor: searchMeta.major2,
               doubleMajorLabel: `${searchMeta.major1} + ${searchMeta.major2}`,
-              doubleMajorStatus: c.doubleMajorStatus || "Needs official verification",
-              doubleMajorVerificationStatus: c.doubleMajorVerificationStatus || "Needs manual verification",
+              doubleMajorStatus: displayStatus,
+              doubleMajorVerificationStatus: isConfirmed ? verification.verification_status : "Needs manual verification",
             }
           )}>+ List</button>
         )}
         {onToggleSave && isCombo && savedIds?.has(c.id) && (
           <button className="link" onClick={addDoubleMajorOption}>Add as double-major option →</button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Feature 1/2: the ONLY way a double_major_verifications record gets created.
+// Every field the family fills in maps straight onto the record; nothing is
+// inferred or guessed. The record only becomes "confirmed" (see
+// isConfirmedDoubleMajor() server-side) once every required field is present
+// AND verificationStatus is "Official source verified" or "User verified" --
+// this form doesn't pre-decide that, the server gate does.
+function ConfirmDoubleMajorForm({ studentId, college, searchMeta, onSaved, onCancel }) {
+  const [form, setForm] = useState({
+    primaryOfficialProgramName: searchMeta.major1, secondaryOfficialProgramName: searchMeta.major2,
+    primaryProgramType: "Major", secondaryProgramType: "Major",
+    officialPolicyName: "", doubleMajorPolicyType: "Double major",
+    doubleMajorAllowedStatus: "Confirmed allowed",
+    sourceUrl: "", sourceLabel: "", sourceType: SOURCE_TYPES[0],
+    lastChecked: new Date().toISOString().slice(0, 10),
+    verificationStatus: "User verified", restrictions: "", notes: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true); setErr(null);
+    try {
+      await api.addDoubleMajorVerification(studentId, {
+        collegeId: college.id, collegeName: college.name,
+        primaryProgramRequested: searchMeta.major1, secondaryProgramRequested: searchMeta.major2,
+        ...form,
+      });
+      onSaved && onSaved();
+    } catch (e) {
+      setErr(e.message || "Could not save.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="card pad" style={{ marginTop: 6, background: "var(--paper)" }}>
+      <div className="note" style={{ fontWeight: 600, marginBottom: 6 }}>Confirm with an official source</div>
+      <p className="note" style={{ marginBottom: 8 }}>
+        Only fill this in from an official college source (catalog, undergraduate bulletin, registrar page, academic
+        advising page, department page, or an official double-major/program policy page). This becomes "Confirmed
+        double-major path" only when every field below is filled in and verification is set to Official or User verified.
+      </p>
+      <div className="grid cols-2" style={{ gap: 8 }}>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Primary official program name</span>
+          <input className="inp" value={form.primaryOfficialProgramName} onChange={set("primaryOfficialProgramName")} />
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Second official program name</span>
+          <input className="inp" value={form.secondaryOfficialProgramName} onChange={set("secondaryOfficialProgramName")} />
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Primary program type</span>
+          <select className="inp" value={form.primaryProgramType} onChange={set("primaryProgramType")}>
+            {PROGRAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Second program type</span>
+          <select className="inp" value={form.secondaryProgramType} onChange={set("secondaryProgramType")}>
+            {PROGRAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Official policy name (e.g. "Double Major Policy")</span>
+          <input className="inp" value={form.officialPolicyName} onChange={set("officialPolicyName")} placeholder="Official policy name" />
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Policy type</span>
+          <select className="inp" value={form.doubleMajorPolicyType} onChange={set("doubleMajorPolicyType")}>
+            {POLICY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Allowed status</span>
+          <select className="inp" value={form.doubleMajorAllowedStatus} onChange={set("doubleMajorAllowedStatus")}>
+            {ALLOWED_STATUSES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Verification</span>
+          <select className="inp" value={form.verificationStatus} onChange={set("verificationStatus")}>
+            {VERIFICATION_STATUSES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Source URL</span>
+          <input className="inp" value={form.sourceUrl} onChange={set("sourceUrl")} placeholder="https://…" />
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Source type</span>
+          <select className="inp" value={form.sourceType} onChange={set("sourceType")}>
+            {SOURCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Source label (optional)</span>
+          <input className="inp" value={form.sourceLabel} onChange={set("sourceLabel")} placeholder="e.g. MIT Undergraduate Bulletin" />
+        </label>
+        <label className="stack" style={{ gap: 2 }}>
+          <span className="note">Last checked</span>
+          <input className="inp" type="date" value={form.lastChecked} onChange={set("lastChecked")} />
+        </label>
+      </div>
+      <label className="stack" style={{ gap: 2, marginTop: 8 }}>
+        <span className="note">Restrictions (optional)</span>
+        <input className="inp" value={form.restrictions} onChange={set("restrictions")} placeholder="e.g. requires school-to-school transfer approval" />
+      </label>
+      <label className="stack" style={{ gap: 2, marginTop: 8 }}>
+        <span className="note">Notes (optional)</span>
+        <input className="inp" value={form.notes} onChange={set("notes")} />
+      </label>
+      {err && <div className="note" style={{ color: "var(--reach)", marginTop: 6 }}>{err}</div>}
+      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+        <button className="btn primary sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save confirmation"}</button>
+        <button className="btn ghost sm" onClick={onCancel} disabled={saving}>Cancel</button>
       </div>
     </div>
   );
