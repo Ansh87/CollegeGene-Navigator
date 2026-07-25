@@ -153,7 +153,13 @@ export const api = {
     }).then(j),
   deleteScholarship: (id, sid) => afetch(`/api/students/${id}/scholarships/${sid}`, { method: "DELETE" }).then(j),
   scholarshipsExportCsvUrl: (id) => `/api/students/${id}/scholarships/export.csv`,
-  collegesByMajor: (major, state) => afetch(`/api/colleges/by-major?major=${encodeURIComponent(major)}${state ? `&state=${encodeURIComponent(state)}` : ""}`).then(j),
+  collegesByMajor: (major, state, { control, deep } = {}) => {
+    const q = new URLSearchParams({ major });
+    if (state) q.set("state", state);
+    if (control && control !== "all") q.set("control", control);
+    if (deep) q.set("deep", "true");
+    return afetch(`/api/colleges/by-major?${q.toString()}`).then(j);
+  },
   collegeMajorCombos: (major1, major2, state) => afetch(`/api/colleges/major-combos?major1=${encodeURIComponent(major1)}${major2 ? `&major2=${encodeURIComponent(major2)}` : ""}${state ? `&state=${encodeURIComponent(state)}` : ""}`).then(j),
   collegeDeadlines: (id) => afetch(`/api/colleges/${id}/deadlines`).then(j),
   browseColleges: ({ name, state, control, major, page = 0, perPage = 25 }) => {

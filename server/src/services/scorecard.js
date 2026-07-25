@@ -463,29 +463,89 @@ const MAJOR_DISCLAIMER = "Program availability is based on College Scorecard fie
 // Do not "helpfully" insert a dot here — it silently zeroes out every search.
 function apiCip(c) { return normalizeCip(c); }
 
-export async function searchByMajor({ major, state = null }) {
-  const { primary } = cipsForMajor(major);
-  const u = new URL(config.scorecard.baseUrl);
-  u.searchParams.set("api_key", config.scorecard.apiKey);
-  u.searchParams.set("fields", "id,school.name,school.city,school.state,school.ownership,latest.admissions.admission_rate.overall,latest.cost.avg_net_price.overall,latest.completion.completion_rate_4yr_150nt,latest.earnings.10_yrs_after_entry.median,latest.programs.cip_4_digit");
-  u.searchParams.set("school.operating", "1");
-  if (state) u.searchParams.set("school.state", state);
-  if (primary.length) {
-    u.searchParams.set("latest.programs.cip_4_digit.code", primary.map(apiCip).join(","));
-    u.searchParams.set("latest.programs.cip_4_digit.credential.level", "3");
-    // NOTE: deliberately NOT setting all_programs_nested here. The CIP filter
-    // already guarantees every returned nested item is a match, and requesting
-    // every program for every college makes the response very large.
-  }
-  u.searchParams.set("sort", "latest.student.size:desc");
-  u.searchParams.set("per_page", "25");
+// Major-search candidate-pool sizes. "Standard" is the default and is what
+// keeps this fast enough for Railway; "Deep" is an explicit, opt-in, advanced
+// option the user must choose — it is never run automatically. These bound
+// how many raw Scorecard records we scan before verifying program matches,
+// NOT a cap on how many verified results we show (all verified matches within
+// the scanned pool are returned; the client windows through them).
+export const MAJOR_SEARCH_STANDARD_POOL = 500;
+export const MAJOR_SEARCH_DEEP_POOL = 2000;
+// Short-lived cache for major-search results (separate from the 24h general
+// cache): search inputs are more varied and results should refresh sooner.
+const MAJOR_SEARCH_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-  const key = `bymajor:${(major || "").toLowerCase()}:${state || "US"}`;
-  const { data } = await cachedFetch(key, u.toString());
-  const raws = data.results || [];
+// Page through College Scorecard for colleges whose bachelor's-level program
+// list includes ANY of `cips`, up to `poolLimit` raw candidates. Mirrors the
+// resilient, throttled pattern used by scanAllColleges()/verifyProgramAvailability()
+// above: a page failure stops the scan and returns what was already fetched
+// (partial:true) rather than failing the whole search.
+async function fetchMajorCandidatePool({ cips, state = null, control = null, poolLimit }) {
+  const perPage = 100;
+  const maxPages = Math.max(1, Math.ceil(poolLimit / perPage));
+  const all = [];
+  let page = 0, partial = false, total = null, lastErr = null;
+  while (page < maxPages && all.length < poolLimit) {
+    const u = new URL(config.scorecard.baseUrl);
+    u.searchParams.set("api_key", config.scorecard.apiKey);
+    u.searchParams.set("fields", "id,school.name,school.city,school.state,school.ownership,latest.admissions.admission_rate.overall,latest.cost.avg_net_price.overall,latest.completion.completion_rate_4yr_150nt,latest.earnings.10_yrs_after_entry.median,latest.programs.cip_4_digit");
+    u.searchParams.set("school.operating", "1");
+    // Predominant bachelor's-degree institutions only (excludes certificate-only
+    // / mostly-2-year schools), matching the pool used for Matches/Best Fit.
+    u.searchParams.set("school.degrees_awarded.predominant", "3");
+    if (state) u.searchParams.set("school.state", state);
+    if (control === "public") u.searchParams.set("school.ownership", "1");
+    if (control === "private") u.searchParams.set("school.ownership", "2");
+    if (cips.length) {
+      u.searchParams.set("latest.programs.cip_4_digit.code", cips.map(apiCip).join(","));
+      u.searchParams.set("latest.programs.cip_4_digit.credential.level", "3");
+    }
+    u.searchParams.set("sort", "latest.student.size:desc");
+    u.searchParams.set("per_page", String(perPage));
+    u.searchParams.set("page", String(page));
+    try {
+      const json = await fetchJson(u.toString());
+      const results = json.results || [];
+      all.push(...results);
+      total = json.metadata?.total ?? total;
+      page++;
+      const seen = page * perPage;
+      if (results.length < perPage || (total != null && seen >= total)) break;
+      await sleep(120); // gentle throttle between pages, same as scanAllColleges
+    } catch (err) {
+      lastErr = err;
+      partial = true;
+      break; // stop scanning, keep whatever we already have
+    }
+  }
+  if (page >= maxPages && total != null && all.length < total) partial = true;
+  return { raws: all.slice(0, poolLimit), total, pagesFetched: page, partial, error: lastErr };
+}
+
+// Search colleges offering ONE major. Scans a candidate pool (Standard: up to
+// 500 colleges; Deep: up to 2,000, opt-in only) instead of a single page of
+// ~25, then verifies bachelor's-level program evidence for every candidate in
+// the pool. The verification/normalize logic below is UNCHANGED from before —
+// only how many raw candidates it runs against has changed.
+export async function searchByMajor({ major, state = null, control = null, deep = false }) {
+  const { primary } = cipsForMajor(major);
+  const mode = deep ? "deep" : "standard";
+  const poolLimit = deep ? MAJOR_SEARCH_DEEP_POOL : MAJOR_SEARCH_STANDARD_POOL;
+
+  const key = `bymajor:v2:${(major || "").toLowerCase()}:${state || "US"}:${control || "any"}:${mode}`;
+  const cached = cacheGet(key);
+  const fresh = cached && Date.now() - cached.fetchedAt < MAJOR_SEARCH_CACHE_TTL_MS;
+  if (fresh) {
+    return { ...cached.data, cached: true, fetchedAt: cached.fetchedAt };
+  }
+
+  const pool = await fetchMajorCandidatePool({ cips: primary, state, control, poolLimit });
+
+  // No live data at all AND nothing cached — surface the honest upstream error.
+  if (!pool.raws.length && pool.error && !cached) throw pool.error;
 
   const colleges = [];
-  for (const raw of raws) {
+  for (const raw of pool.raws) {
     const programs = bachelorPrograms(raw);
     const matching = matchPrograms(programs, primary);
     if (!matching.length) continue; // require verified bachelor's program evidence
@@ -500,14 +560,25 @@ export async function searchByMajor({ major, state = null }) {
     });
   }
 
-  return {
+  const result = {
     major,
     cipCodesUsed: primary,
-    rawResultCount: raws.length,
+    mode, // "standard" | "deep"
+    candidatePoolLimit: poolLimit,
+    candidatePoolScanned: pool.raws.length,
+    rawResultCount: pool.raws.length, // back-compat alias (previously "raw API results")
+    scoredCount: colleges.length,
+    partial: pool.partial,
+    scanTotalAvailable: pool.total,
     source: MAJOR_SOURCE,
     disclaimer: MAJOR_DISCLAIMER,
-    colleges: colleges.slice(0, 40),
+    colleges,
   };
+
+  if (colleges.length || pool.raws.length) cacheSet(key, result);
+  else if (cached) return { ...cached.data, cached: true, stale: true, fetchedAt: cached.fetchedAt };
+
+  return { ...result, cached: false, fetchedAt: Date.now() };
 }
 
 // Combination search: one or two majors.

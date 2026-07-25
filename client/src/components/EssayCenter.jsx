@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SourceBadge } from "./ui.jsx";
+import { SourceBadge, InlineSpinner, Spinner, SuccessNote } from "./ui.jsx";
 
 async function authHeader() {
   try {
@@ -420,15 +420,23 @@ export function EssayCenter({ studentId, saved, collegeNames, onGo, initialTrack
     loadStories();
   };
 
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvErr, setCsvErr] = useState(null);
   const exportCsv = async () => {
+    if (csvBusy) return; // prevent duplicate clicks
+    setCsvBusy(true); setCsvErr(null);
     try {
       const r = await fetch(api.essayExportCsvUrl(studentId), { headers: await authHeader() });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `essay-center-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
       URL.revokeObjectURL(url);
-    } catch { /* if this fails, the family can still view everything on-screen */ }
+    } catch (e) {
+      // The family can still view everything on-screen; just tell them the download failed.
+      setCsvErr(e.message || "Could not download the CSV file.");
+    } finally { setCsvBusy(false); }
   };
 
   const byCollege = new Map();
@@ -451,7 +459,12 @@ export function EssayCenter({ studentId, saved, collegeNames, onGo, initialTrack
             workload -- all planning and tracking, never a finished essay. The student writes every essay themselves.
           </p>
         </div>
-        <button className="btn ghost" onClick={exportCsv}>Export CSV</button>
+        <div>
+          <button className="btn ghost" onClick={exportCsv} disabled={csvBusy}>
+            {csvBusy ? <><InlineSpinner />Saving CSV…</> : "Export CSV"}
+          </button>
+          {csvErr && <div className="note" style={{ color: "var(--reach)", marginTop: 4 }}>{csvErr}</div>}
+        </div>
       </div>
 
       <div className="disclaimer">
@@ -540,19 +553,24 @@ export function EssayCenter({ studentId, saved, collegeNames, onGo, initialTrack
                 {overview.collegeName && <h3 style={{ margin: 0 }}>Essay Prompt Dashboard for {overview.collegeName}</h3>}
                 <div className="row wrap" style={{ gap: 8 }}>
                   <button className="btn amber" disabled={!overviewCollege.collegeId || overviewFinding} onClick={runOverviewFind} title={!overviewCollege.collegeId ? "Save this college (with a College Scorecard match) to use Find essay requirements" : ""}>
-                    {overviewFinding ? "Checking..." : "Find essay requirements"}
+                    {overviewFinding ? <><InlineSpinner />Checking...</> : "Find essay requirements"}
                   </button>
                   <button className="btn ghost" onClick={jumpToAddPromptForm}>Add a prompt manually</button>
                 </div>
-                {overviewFindResult && (
-                  <div className="disclaimer">
+                {overviewFindResult && !overviewFindResult.error && (
+                  <SuccessNote>
                     {overviewFindResult.method === "reference" ? (
                       <>Used a hand-verified reference for {overviewFindResult.collegeName}: {overviewFindResult.promptsAdded ?? 0} prompt(s) added, {overviewFindResult.promptsRefreshed ?? 0} refreshed.
                         {overviewFindResult.platformPromptsAttached && " Also attached this college's shared platform prompts (Common App / UC)."}</>
                     ) : (
                       <>Checked {overviewFindResult.domain || "the official college site"}: found {overviewFindResult.promptsAdded ?? 0} prompt(s).</>
                     )}
-                    {" "}{overviewFindResult.notice}
+                    {overviewFindResult.notice ? ` ${overviewFindResult.notice}` : ""}
+                  </SuccessNote>
+                )}
+                {overviewFindResult?.error && (
+                  <div className="disclaimer" style={{ borderLeftColor: "var(--reach)" }}>
+                    {overviewFindResult.notice} <span className="note">({overviewFindResult.error})</span>
                   </div>
                 )}
 
@@ -583,7 +601,7 @@ export function EssayCenter({ studentId, saved, collegeNames, onGo, initialTrack
                   onCreateTask={createEssayTask} onShowStoryMatches={showStoryMatches} storyMatches={storyMatches} storyMatchesFor={storyMatchesFor} />
               </div>
             )}
-            {overviewCollege && !overview && <div className="note" style={{ marginTop: 10 }}>Loading...</div>}
+            {overviewCollege && !overview && <div style={{ marginTop: 10 }}><Spinner label="Loading essay prompts…" /></div>}
           </div>
 
           <div className="card pad" style={{ borderColor: "var(--amber)" }}>
@@ -595,14 +613,17 @@ export function EssayCenter({ studentId, saved, collegeNames, onGo, initialTrack
               anything discovered still needs the usual verification.
             </p>
             <button className="btn amber" style={{ marginTop: 8 }} disabled={findingAll} onClick={runFindAll}>
-              {findingAll ? "Checking every college... this can take a minute" : "Find essay requirements for all my colleges"}
+              {findingAll ? <><InlineSpinner />Checking every college... this can take a minute</> : "Find essay requirements for all my colleges"}
             </button>
+            {findAllResult && findAllResult.totalColleges != null && (
+              <SuccessNote>
+                Checked {findAllResult.totalColleges} college(s): {findAllResult.referenceCount} from verified references,
+                {" "}{findAllResult.foundCount} found by searching the official site, {findAllResult.notFoundCount} not found yet.
+              </SuccessNote>
+            )}
             {findAllResult && (
               <div className="disclaimer" style={{ marginTop: 12 }}>
-                {findAllResult.totalColleges != null ? (
-                  <>Checked {findAllResult.totalColleges} college(s): {findAllResult.referenceCount} from verified references,
-                    {" "}{findAllResult.foundCount} found by searching the official site, {findAllResult.notFoundCount} not found yet.</>
-                ) : findAllResult.notice}
+                {findAllResult.totalColleges == null && findAllResult.notice}
                 {findAllResult.results?.length > 0 && (
                   <ul style={{ marginTop: 6 }}>
                     {findAllResult.results.map((r, i) => (

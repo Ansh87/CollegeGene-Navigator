@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SetupPlanningButton } from "./ui.jsx";
+import { SetupPlanningButton, InlineSpinner } from "./ui.jsx";
 
 const CATEGORY_OPTS = ["", "Dream / Lottery", "Reach", "Target", "Safety", "Financial Safety", "In-state Anchor"];
 const DECISION_OPTS = ["Keep", "Maybe", "Remove", "Need to verify", "Applied", "Accepted", "Rejected", "Waitlisted"];
@@ -202,15 +202,23 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
     if (next && notesByItem[itemId] === undefined) loadNotes(itemId);
   };
 
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvErr, setCsvErr] = useState(null);
   const exportCsv = async () => {
+    if (csvBusy) return; // prevent duplicate clicks
+    setCsvBusy(true); setCsvErr(null);
     try {
       const r = await fetch(`/api/decision-plan/${studentId}/export.csv`, { headers: await authHeader() });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `decision-plan-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
       URL.revokeObjectURL(url);
-    } catch { /* if this fails, the family can still view/edit the plan on-screen */ }
+    } catch (e) {
+      // if this fails, the family can still view/edit the plan on-screen
+      setCsvErr(e.message || "Could not download the CSV file.");
+    } finally { setCsvBusy(false); }
   };
 
   const availableSaved = (saved || []).filter((s) => !items.some((it) => it.college_id === s.college_id));
@@ -223,7 +231,12 @@ export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) 
           <h1>Decision Plan</h1>
           <p className="lead">Build the real final list, verify every program, track major-specific admission risk and cost risk, and generate strategy notes -- all evidence-based, never invented.</p>
         </div>
-        <button className="btn ghost" onClick={exportCsv}>Export CSV</button>
+        <div>
+          <button className="btn ghost" onClick={exportCsv} disabled={csvBusy}>
+            {csvBusy ? <><InlineSpinner />Saving CSV…</> : "Export CSV"}
+          </button>
+          {csvErr && <div className="note" style={{ color: "var(--reach)", marginTop: 4 }}>{csvErr}</div>}
+        </div>
       </div>
 
       <div className="disclaimer">
@@ -591,15 +604,23 @@ function VerificationCenterPanel({ studentId, refreshKey, onGo }) {
     api.verificationCenter(studentId).then(setData).catch(() => setData(null));
   }, [studentId, refreshKey]);
 
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvErr, setCsvErr] = useState(null);
   const exportCsv = async () => {
+    if (csvBusy) return; // prevent duplicate clicks
+    setCsvBusy(true); setCsvErr(null);
     try {
       const r = await fetch(api.verificationCenterExportCsvUrl(studentId), { headers: await authHeader() });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `verification-center-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
       URL.revokeObjectURL(url);
-    } catch { /* if this fails, the family can still view the list on-screen */ }
+    } catch (e) {
+      // if this fails, the family can still view the list on-screen
+      setCsvErr(e.message || "Could not download the CSV file.");
+    } finally { setCsvBusy(false); }
   };
 
   if (!data || !data.totalColleges) return null;
@@ -613,7 +634,12 @@ function VerificationCenterPanel({ studentId, refreshKey, onGo }) {
         <h3 style={{ margin: 0 }}>Verification Center</h3>
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
           <span className="note">{data.totalItems} open item(s) across {data.totalColleges} college(s)</span>
-          {data.totalItems > 0 && <button className="btn ghost sm" onClick={exportCsv}>Export CSV</button>}
+          {data.totalItems > 0 && (
+            <button className="btn ghost sm" onClick={exportCsv} disabled={csvBusy}>
+              {csvBusy ? <><InlineSpinner />Saving CSV…</> : "Export CSV"}
+            </button>
+          )}
+          {csvErr && <span className="note" style={{ color: "var(--reach)" }}>{csvErr}</span>}
         </div>
       </div>
       <p className="note">Everything below still needs a source checked, a conflict resolved, or a family decision made -- nothing here is hidden or assumed.</p>

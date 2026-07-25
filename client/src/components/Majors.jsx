@@ -2,7 +2,7 @@
 // signal, and outlook.
 import React, { useState, useEffect, useRef } from "react";
 import { api } from "../lib/api.js";
-import { Spinner, SourceBadge, fmtUSD, fmtPct } from "./ui.jsx";
+import { Spinner, InlineSpinner, SourceBadge, SuccessNote, fmtUSD, fmtPct } from "./ui.jsx";
 import { US_STATES } from "../lib/states.js";
 
 export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
@@ -17,12 +17,21 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
   const [searchingMajor, setSearchingMajor] = useState(false);
   const [searchMeta, setSearchMeta] = useState(null);
   const [majorSearchError, setMajorSearchError] = useState(null);
+  const [searchSuccessMsg, setSearchSuccessMsg] = useState(null);
   const [tab, setTab] = useState("search");   // "search" | "recommendations"
   // "size" matches the API's default order (largest schools first, from
   // College Scorecard enrollment data); "selectivity" re-sorts client-side by
   // admission rate (already fetched from Scorecard, just not shown before)
   // so the family can see which options are most/least selective at a glance.
   const [majorSort, setMajorSort] = useState("selectivity");
+  // Deep search (up to 2,000 candidate colleges) is an explicit, opt-in,
+  // advanced option -- it never runs automatically. Standard search (up to
+  // 500 candidates) is the default for every search.
+  const [deepSearch, setDeepSearch] = useState(false);
+  // How many of the scored/verified colleges to display at once. Starts at
+  // 20; "Show Top 30/50" jump straight to that size, "Load Next 25" adds 25
+  // more, without re-running the search or re-scoring anything.
+  const [displayCount, setDisplayCount] = useState(20);
   const searchRef = useRef(null);
 
   // Prefill the planner from the Profile's own Primary/Secondary major once,
@@ -41,26 +50,37 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
   const resetSearch = () => {
     setMajorQuery(""); setMajor2Query(""); setStateFilter("");
     setComboMode(false); setMajorColleges(null); setSearchMeta(null); setMajorSearchError(null);
+    setSearchSuccessMsg(null); setDisplayCount(20); setDeepSearch(false);
   };
 
   // Pick a combo -> jump to the search box so the user sees what was selected.
   const useCombo = (primary, partner) => {
     setComboMode(true); setMajorQuery(primary); setMajor2Query(partner);
-    setMajorColleges(null); setSearchMeta(null); setMajorSearchError(null);
+    setMajorColleges(null); setSearchMeta(null); setMajorSearchError(null); setSearchSuccessMsg(null);
+    setDisplayCount(20);
     setTab("search");
     setTimeout(() => searchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
   };
 
   const runSearch = async () => {
+    if (searchingMajor) return; // prevent duplicate clicks while a search is already running
     const q = majorQuery.trim();
     if (!q) return;
-    setSearchingMajor(true); setMajorColleges(null); setSearchMeta(null); setMajorSearchError(null);
+    const isCombo = comboMode && major2Query.trim();
+    setSearchingMajor(true); setMajorColleges(null); setSearchMeta(null);
+    setMajorSearchError(null); setSearchSuccessMsg(null); setDisplayCount(20);
     try {
-      const r = (comboMode && major2Query.trim())
+      const r = isCombo
         ? await api.collegeMajorCombos(q, major2Query.trim(), stateFilter || undefined)
-        : await api.collegesByMajor(q, stateFilter || undefined);
+        : await api.collegesByMajor(q, stateFilter || undefined, { deep: !isCombo && deepSearch });
       setMajorColleges(r.colleges || []);
-      setSearchMeta({ ...r, combo: !!(comboMode && major2Query.trim()) });
+      setSearchMeta({ ...r, combo: !!isCombo });
+      const found = (r.colleges || []).length;
+      setSearchSuccessMsg(
+        isCombo
+          ? `Found ${found} college${found === 1 ? "" : "s"} offering both fields.`
+          : `Scored ${r.candidatePoolScanned ?? found} candidate college${(r.candidatePoolScanned ?? found) === 1 ? "" : "s"} — found ${found} with a verified match.`
+      );
     } catch (err) {
       // An API failure is NOT the same as "no colleges matched".
       setMajorSearchError(err?.message || "Could not check official program data.");
@@ -168,7 +188,9 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
           )}
           <input className="inp" style={{ width: 90 }} value={stateFilter} placeholder="State" maxLength={2}
             onChange={(e) => setStateFilter(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && runSearch()} />
-          <button className="btn primary sm" onClick={runSearch}>Search</button>
+          <button className="btn primary sm" onClick={runSearch} disabled={searchingMajor}>
+            {searchingMajor ? <><InlineSpinner />Searching…</> : "Search"}
+          </button>
         </div>
         <div className="row wrap" style={{ gap: 6, marginTop: 8, alignItems: "center" }}>
           <span className="note" style={{ fontWeight: 600 }}>State:</span>
@@ -183,7 +205,25 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
           ))}
         </div>
 
-        {searchingMajor && <div style={{ marginTop: 10 }}><Spinner label="Checking official program data…" /></div>}
+        {!comboMode && (
+          <div style={{ marginTop: 10 }}>
+            <label className="row" style={{ gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+              <input type="checkbox" checked={deepSearch} disabled={searchingMajor}
+                onChange={(e) => setDeepSearch(e.target.checked)} style={{ marginTop: 2 }} />
+              <span className="note" style={{ fontSize: 12 }}>
+                <strong>Deep search (advanced)</strong> — candidate pool searched, up to 2,000 colleges instead of 500.
+                <span style={{ display: "block", color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
+                  Deep search may take longer. Results still need official verification. Standard search (up to 500
+                  candidates) is enough for most searches.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
+
+        {searchingMajor && <div style={{ marginTop: 10 }}><Spinner label="Searching colleges and checking official program data…" /></div>}
+
+        {searchSuccessMsg && !searchingMajor && !majorSearchError && <SuccessNote>{searchSuccessMsg}</SuccessNote>}
 
         {majorSearchError && !searchingMajor && (
           <div className="disclaimer" style={{ borderLeftColor: "var(--reach)", marginTop: 10 }}>
@@ -198,8 +238,19 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
             {searchMeta?.cipCodesUsed && (
               <div className="note" style={{ marginBottom: 6 }}>
                 Source: {searchMeta.source || "College Scorecard"} · CIP codes used: {Array.isArray(searchMeta.cipCodesUsed) ? searchMeta.cipCodesUsed.join(", ") : [searchMeta.cipCodesUsed.major1, searchMeta.cipCodesUsed.major2].filter(Boolean).flat().join(", ")}
-                {searchMeta.rawResultCount != null ? ` · ${searchMeta.rawResultCount} colleges checked` : ""}
+                {searchMeta.candidatePoolScanned != null
+                  ? ` · Candidate pool searched: ${searchMeta.candidatePoolScanned}${searchMeta.mode === "deep" ? " (deep search)" : ""}`
+                  : (searchMeta.rawResultCount != null ? ` · ${searchMeta.rawResultCount} colleges checked` : "")}
               </div>
+            )}
+            {searchMeta?.partial && (
+              <div className="note" style={{ color: "var(--amber)", marginBottom: 6 }}>
+                This search stopped before checking every possible college (a very large or slow result set). Try
+                narrowing with a state filter, or use Deep search for a larger candidate pool.
+              </div>
+            )}
+            {searchMeta?.deepSearchWarning && (
+              <div className="note" style={{ color: "var(--muted)", marginBottom: 6 }}>{searchMeta.deepSearchWarning}</div>
             )}
             {!majorColleges.length ? (
               <div className="empty">
@@ -219,7 +270,7 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
                     <span className="note">Sort:</span>
                     <span className={`chip ${majorSort === "selectivity" ? "on" : ""}`} onClick={() => setMajorSort("selectivity")}>Most selective first</span>
                     <span className={`chip ${majorSort === "size" ? "on" : ""}`} onClick={() => setMajorSort("size")}>Largest first</span>
-                    <span className="note">{majorColleges.length} found</span>
+                    <span className="note">{majorColleges.length} scored colleges</span>
                   </div>
                 </div>
                 {searchMeta?.combo && (
@@ -237,10 +288,27 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
                   "Selectivity rank" is this list's colleges ordered by admission rate (most selective = #1) from College Scorecard —
                   not a US News-style prestige ranking. Colleges with no admission-rate data on file are shown unranked.
                 </div>
-                {sortedMajorColleges.slice(0, 15).map((c) => (
+                <div className="note" style={{ fontWeight: 600 }}>
+                  Showing 1–{Math.min(displayCount, sortedMajorColleges.length)} of {sortedMajorColleges.length} scored colleges
+                </div>
+                {sortedMajorColleges.slice(0, displayCount).map((c) => (
                   <MajorCollegeCard key={c.id} c={c} profile={profile} studentId={studentId} searchMeta={searchMeta}
                     onOpen={onOpen} onToggleSave={onToggleSave} savedIds={savedIds} />
                 ))}
+                <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+                  {displayCount < 30 && sortedMajorColleges.length > displayCount && (
+                    <button className="btn ghost sm" onClick={() => setDisplayCount(30)}>Show Top 30</button>
+                  )}
+                  {displayCount < 50 && sortedMajorColleges.length > displayCount && (
+                    <button className="btn ghost sm" onClick={() => setDisplayCount(50)}>Show Top 50</button>
+                  )}
+                  {sortedMajorColleges.length > displayCount && (
+                    <button className="btn ghost sm" onClick={() => setDisplayCount((n) => n + 25)}>Load Next 25</button>
+                  )}
+                  {displayCount > 20 && (
+                    <button className="btn ghost sm" onClick={() => setDisplayCount(20)}>Reset to Top 20</button>
+                  )}
+                </div>
               </div>
             )}
             {searchMeta?.disclaimer && <div className="note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>{searchMeta.disclaimer}</div>}

@@ -521,8 +521,13 @@ collegesRouter.get("/by-major", async (req, res) => {
   try {
     const major = (req.query.major || "").trim();
     const state = (req.query.state || "").trim() || null;
+    const control = (req.query.control || "").trim() || null;
+    const deep = String(req.query.deep || "").toLowerCase() === "true";
     if (!major) return res.status(400).json({ error: "bad_request", message: "major query required" });
-    const out = await searchByMajor({ major, state });
+    const out = await searchByMajor({ major, state, control, deep });
+    if (deep) {
+      out.deepSearchWarning = "Deep search may take longer. Results still need official verification.";
+    }
     res.json(out);
   } catch (err) { honestError(res, err); }
 });

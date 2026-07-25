@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SourceBadge } from "./ui.jsx";
+import { SourceBadge, InlineSpinner } from "./ui.jsx";
 
 const SOURCE_TYPES = [
   ["program_page", "Program page"],
@@ -259,15 +259,23 @@ export function Programs({ studentId, profile }) {
     }
   };
 
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvErr, setCsvErr] = useState(null);
   const exportCsv = async () => {
+    if (csvBusy) return; // prevent duplicate clicks
+    setCsvBusy(true); setCsvErr(null);
     try {
       const r = await fetch(api.programsExportCsvUrl(studentId), { headers: await authHeader() });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `programs-and-opportunities-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
       URL.revokeObjectURL(url);
-    } catch { /* if this fails, the family can still view/edit everything on-screen */ }
+    } catch (e) {
+      // if this fails, the family can still view/edit everything on-screen
+      setCsvErr(e.message || "Could not download the CSV file.");
+    } finally { setCsvBusy(false); }
   };
 
   return (
@@ -282,7 +290,12 @@ export function Programs({ studentId, profile }) {
             source-labeled, dated, and flagged when it still needs manual verification. Nothing here is invented.
           </p>
         </div>
-        <button className="btn ghost" onClick={exportCsv}>Export CSV</button>
+        <div>
+          <button className="btn ghost" onClick={exportCsv} disabled={csvBusy}>
+            {csvBusy ? <><InlineSpinner />Saving CSV…</> : "Export CSV"}
+          </button>
+          {csvErr && <div className="note" style={{ color: "var(--reach)", marginTop: 4 }}>{csvErr}</div>}
+        </div>
       </div>
 
       <div className="disclaimer">
@@ -335,7 +348,7 @@ export function Programs({ studentId, profile }) {
           </div>
         </div>
         <button className="btn amber" style={{ marginTop: 10 }} disabled={busy || !selectedCollege} onClick={researchCollege}>
-          Research this college
+          {busy ? <><InlineSpinner />Researching this college…</> : "Research this college"}
         </button>
         {!selectedCollege && <div className="note" style={{ marginTop: 6 }}>Pick a college above first.</div>}
 

@@ -196,6 +196,7 @@ table.t tr:hover td { background: #fffaf0; }
 .kpi .l { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .divider { height: 1px; background: var(--line-2); margin: 4px 0; }
 .spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--ink-700); border-radius: 50%; animation: spin .7s linear infinite; }
+.spinner-sm { display: inline-block; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,0.5); border-top-color: currentColor; border-radius: 50%; animation: spin .7s linear infinite; margin-right: 6px; vertical-align: -1px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
 .pill { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 6px; background: var(--paper-2); color: var(--muted); }

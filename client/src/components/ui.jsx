@@ -54,6 +54,13 @@ export function Spinner({ label }) {
   </div>;
 }
 
+// InlineSpinner: a small spinner glyph meant to sit inside a busy button, next
+// to its "Searching…"/"Saving…" label, so long-running actions show a visible
+// spinner AND status text, not just text alone.
+export function InlineSpinner() {
+  return <span className="spinner-sm" aria-hidden="true" />;
+}
+
 // Part L: "Set up application planning for this college" -- one button
 // (used from My List and Decision Plan) that creates a starting application-
 // pathway record, attempts to verify a timeline, finds essay prompts, and
@@ -91,6 +98,17 @@ export function SetupPlanningButton({ studentId, collegeId, collegeName, state }
       {parts.length ? `Done: ${parts.join(", ")}. ` : "Already set up -- nothing new to add. "}
       Everything is still marked "Needs manual verification" until confirmed.
     </span>
+  );
+}
+
+// SuccessNote: a brief, friendly confirmation banner (e.g. "Found 42 colleges",
+// "Saved to your Decision Plan"). Used after a long-running action completes,
+// alongside Spinner (in-progress) and ErrorNote (failed).
+export function SuccessNote({ children }) {
+  return (
+    <div className="note" style={{ color: "var(--safety)", fontWeight: 600, marginTop: 6 }}>
+      ✓ {children}
+    </div>
   );
 }
 

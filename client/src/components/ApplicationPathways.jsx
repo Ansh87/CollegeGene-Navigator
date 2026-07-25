@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
-import { SourceBadge } from "./ui.jsx";
+import { SourceBadge, InlineSpinner } from "./ui.jsx";
 
 async function authHeader() {
   try {
@@ -109,6 +109,8 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
   const [form, setForm] = useState(BLANK_FORM);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvErr, setCsvErr] = useState(null);
   const [msg, setMsg] = useState(null);
   // Name-pattern suggestion for whichever college is picked in the add form
   // (e.g. selecting a "University of California, X" campus suggests the UC
@@ -377,6 +379,8 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
   const [timelineFindResult, setTimelineFindResult] = useState(null);
   const [timelineAutofillPreview, setTimelineAutofillPreview] = useState(null);
   const [timelineAutofilling, setTimelineAutofilling] = useState(false);
+  const [timelineCsvBusy, setTimelineCsvBusy] = useState(false);
+  const [timelineCsvErr, setTimelineCsvErr] = useState(null);
   const [timelineAutofillResult, setTimelineAutofillResult] = useState(null);
   const [populateAllBusy, setPopulateAllBusy] = useState(false);
   const [populateAllResult, setPopulateAllResult] = useState(null);
@@ -476,25 +480,36 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
   };
 
   const timelineExportCsv = async () => {
+    if (timelineCsvBusy) return; // prevent duplicate clicks
+    setTimelineCsvBusy(true); setTimelineCsvErr(null);
     try {
       const r = await fetch(api.timelineExportCsvUrl(studentId), { headers: await authHeader() });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `application-timeline-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
       URL.revokeObjectURL(url);
-    } catch { /* if this fails, the family can still view everything on-screen */ }
+    } catch (e) {
+      // The family can still view everything on-screen; just tell them the download failed.
+      setTimelineCsvErr(e.message || "Could not download the CSV file.");
+    } finally { setTimelineCsvBusy(false); }
   };
 
   const exportCsv = async () => {
+    if (csvBusy) return; // prevent duplicate clicks
+    setCsvBusy(true); setCsvErr(null);
     try {
       const r = await fetch(api.pathwaysExportCsvUrl(studentId), { headers: await authHeader() });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `application-pathways-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
       URL.revokeObjectURL(url);
-    } catch { /* if this fails, the family can still view everything on-screen */ }
+    } catch (e) {
+      setCsvErr(e.message || "Could not download the CSV file.");
+    } finally { setCsvBusy(false); }
   };
 
   const byCollege = new Map();
@@ -515,7 +530,12 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
             extra applications (honors, scholarship, program-specific) each one requires -- so nothing gets missed.
           </p>
         </div>
-        <button className="btn ghost" onClick={exportCsv}>Export CSV</button>
+        <div>
+          <button className="btn ghost" onClick={exportCsv} disabled={csvBusy}>
+            {csvBusy ? <><InlineSpinner />Saving CSV…</> : "Export CSV"}
+          </button>
+          {csvErr && <div className="note" style={{ color: "var(--reach)", marginTop: 4 }}>{csvErr}</div>}
+        </div>
       </div>
 
       <div className="disclaimer">
@@ -534,7 +554,14 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
               decision notification, and enrollment deposit. Pick a college, then verify deadlines or add one yourself.
             </p>
           </div>
-          {timelineCollegeId && <button className="btn ghost sm" onClick={timelineExportCsv}>Export timeline CSV</button>}
+          {timelineCollegeId && (
+            <div>
+              <button className="btn ghost sm" onClick={timelineExportCsv} disabled={timelineCsvBusy}>
+                {timelineCsvBusy ? <><InlineSpinner />Saving CSV…</> : "Export timeline CSV"}
+              </button>
+              {timelineCsvErr && <div className="note" style={{ color: "var(--reach)", marginTop: 4 }}>{timelineCsvErr}</div>}
+            </div>
+          )}
         </div>
 
         <div className="row wrap" style={{ gap: 8, alignItems: "center", marginTop: 8 }}>
