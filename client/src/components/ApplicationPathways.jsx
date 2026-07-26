@@ -15,6 +15,7 @@ import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
 import { SourceBadge, InlineSpinner, RestoredNote } from "./ui.jsx";
 import { usePersistedSearch } from "../lib/persistedSearch.js";
+import { useEntryOverride } from "../lib/entryOverride.js";
 
 async function authHeader() {
   try {
@@ -97,7 +98,7 @@ const BLANK_TIMELINE_FORM = {
   eventDate: "", cycleYear: "", sourceUrl: "", verificationStatus: "Needs manual verification", notes: "",
 };
 
-export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focusCollegeId }) {
+export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focusCollegeId, focusSection, focusSectionNonce }) {
   const [platforms, setPlatforms] = useState([]);
   const [verificationStatuses, setVerificationStatuses] = useState([]);
   const [ynu, setYnu] = useState(["Yes", "No", "Unknown"]);
@@ -408,6 +409,12 @@ export function ApplicationPathways({ studentId, saved, collegeNames, onGo, focu
     setTimelineCollegeId(focusCollegeId);
     timelineSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [focusCollegeId]);
+
+  // Apply -> Timeline subtab: same page as Application Pathways (Timeline is
+  // a section here, not a separate page) -- just scroll straight to it.
+  useEntryOverride(focusSection === "timeline", focusSectionNonce, () => {
+    timelineSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   const loadTimeline = useCallback(() => {
     loadTimelineDeadlineSummary(); // keep "Your application records" / the add-record form's cross-reference current too

@@ -1,6 +1,6 @@
 // App.jsx -- top-level shell. Routes between views, loads live recommendations,
 // and persists the student's list to the backend DB.
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { api } from "./lib/api.js";
 import { ProfileForm, BLANK_PROFILE } from "./components/ProfileForm.jsx";
 import { Results } from "./components/Results.jsx";
@@ -20,6 +20,8 @@ import { Programs } from "./components/Programs.jsx";
 import { DecisionPlan } from "./components/DecisionPlan.jsx";
 import { ApplicationPathways } from "./components/ApplicationPathways.jsx";
 import { EssayCenter } from "./components/EssayCenter.jsx";
+import { FinancialAid } from "./components/FinancialAid.jsx";
+import { PortalTracker } from "./components/PortalTracker.jsx";
 import { About } from "./components/About.jsx";
 import { Journey } from "./components/Journey.jsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
@@ -55,24 +57,90 @@ function Logo() {
   );
 }
 
-const TABS = [
-  ["dashboard", "Dashboard"],
-  ["journey", "Journey"],
-  ["profile", "Profile"],
-  ["matches", "Matches"],
-  ["browse", "Browse Colleges"],
-  ["saved", "My List"],
-  ["programs", "Programs & Opportunities"],
-  ["decisionPlan", "Decision Plan"],
-  ["applicationPathways", "Application Pathways"],
-  ["essays", "Essay Center"],
-  ["majors", "Majors"],
-  ["courses", "Courses"],
-  ["strategy", "Strategy"],
-  ["advisor", "Advisor"],
-  ["applications", "Applications"],
-  ["info", "Info"],
+// Grouped top navigation (UX/navigation cleanup -- the old flat 16-item nav
+// collapsed into 7 families: Dashboard, Profile, Explore, My List, Plan,
+// Apply, More). Every OLD "view" key below still works exactly as it did
+// before this reorg -- nothing was renamed, removed, or rewired; pages were
+// only re-grouped under a top-level family with a subtab bar underneath it.
+// `view` (below) remains the single source of truth for which page renders;
+// SECTIONS is only used to (a) decide which top-level button + subtab row to
+// highlight, and (b) build the subtab bar. Old buttons/links elsewhere in
+// the app that still call onGo("essays"), onGo("decisionPlan"), etc. keep
+// working unchanged -- see VIEW_TO_GROUP/VIEW_TO_DEFAULT_SUBKEY below.
+//
+// A few subtabs point at a page that already has its own internal tab/mode
+// switch (Majors.jsx's Single/Double major toggle, DecisionPlan.jsx's Final
+// List / Course Plans / Timeline & Tasks switch, ApplicationPathways.jsx's
+// Timeline section) instead of being separate pages. Those subtabs carry an
+// `entry` hint (see lib/entryOverride.js) that lands the family on the right
+// internal tab without rebuilding any of those pages.
+const SECTIONS = [
+  { key: "dashboard", label: "Dashboard", view: "dashboard" },
+  { key: "profile", label: "Profile", view: "profile" },
+  {
+    key: "explore", label: "Explore",
+    subtabs: [
+      { key: "matches", label: "Matches", view: "matches" },
+      { key: "browse", label: "Browse Colleges", view: "browse" },
+      { key: "majors", label: "Majors", view: "majors" },
+      { key: "doubleMajor", label: "Double Major Search", view: "majors", entry: { mode: "double" } },
+      { key: "programs", label: "Programs & Opportunities", view: "programs" },
+      { key: "courses", label: "Courses & Prep", view: "courses" },
+      { key: "advisor", label: "Advisor", view: "advisor" },
+    ],
+  },
+  { key: "saved", label: "My List", view: "saved" },
+  {
+    key: "plan", label: "Plan",
+    subtabs: [
+      { key: "decisionPlan", label: "Decision Plan", view: "decisionPlan" },
+      { key: "journey", label: "Journey", view: "journey" },
+      { key: "verificationCenter", label: "Verification Center", view: "decisionPlan" },
+      { key: "finalListHealth", label: "Final List Health Check", view: "decisionPlan" },
+      { key: "strategy", label: "Strategy", view: "strategy" },
+      { key: "cost", label: "Cost", view: "decisionPlan" },
+      { key: "scholarships", label: "Scholarships & Honors", view: "scholarships" },
+      { key: "visits", label: "Visits / Interest", view: "decisionPlan", entry: { sub: "tasks" } },
+    ],
+  },
+  {
+    key: "apply", label: "Apply",
+    subtabs: [
+      { key: "applicationPathways", label: "Application Pathways", view: "applicationPathways" },
+      { key: "timeline", label: "Timeline", view: "applicationPathways", entry: { section: "timeline" } },
+      { key: "essays", label: "Essays", view: "essays" },
+      { key: "applications", label: "Applications Tracker", view: "applications" },
+      { key: "recommendations", label: "Recommendations", view: "applications" },
+      { key: "portalTracker", label: "Portal Tracker", view: "portalTracker" },
+      { key: "financialAid", label: "Financial Aid", view: "financialAid" },
+    ],
+  },
+  {
+    key: "more", label: "More",
+    subtabs: [
+      { key: "info", label: "Info", view: "info" },
+      { key: "help", label: "Help", view: "help" },
+      { key: "disclaimer", label: "Disclaimer", view: "about" },
+      { key: "export", label: "Export", view: "export" },
+      { key: "settings", label: "Settings", view: "settings" },
+    ],
+  },
 ];
+
+// view -> group key (top-level highlight), and view -> the subtab that
+// should highlight by default when that view is reached WITHOUT going
+// through a subtab click (e.g. an internal "Open Essay Center ->" button
+// calling onGo("essays") directly). First subtab wins for the handful of
+// views shared by more than one subtab.
+const VIEW_TO_GROUP = {};
+const VIEW_TO_DEFAULT_SUBKEY = {};
+SECTIONS.forEach((sec) => {
+  if (sec.view) VIEW_TO_GROUP[sec.view] = sec.key;
+  (sec.subtabs || []).forEach((st) => {
+    if (!(st.view in VIEW_TO_GROUP)) VIEW_TO_GROUP[st.view] = sec.key;
+    if (!(st.view in VIEW_TO_DEFAULT_SUBKEY)) VIEW_TO_DEFAULT_SUBKEY[st.view] = st.key;
+  });
+});
 
 export default function App() {
   const { user, signOut } = useAuth();
@@ -89,6 +157,62 @@ export default function App() {
     setFocusCollegeId(collegeId || null);
     setView(nextView);
   }, []);
+
+  // ---- Grouped navigation state (see SECTIONS above) ----
+  // One-shot "entry" signals for the few subtabs that land on a page's own
+  // internal tab/mode rather than a separate page (see lib/entryOverride.js).
+  const [majorsEntry, setMajorsEntry] = useState({ mode: null, nonce: 0 });
+  const [decisionPlanEntry, setDecisionPlanEntry] = useState({ sub: null, nonce: 0 });
+  const [pathwaysEntry, setPathwaysEntry] = useState({ section: null, nonce: 0 });
+  // Which subtab is highlighted within each group's subtab bar, keyed by
+  // group. Defaults follow VIEW_TO_DEFAULT_SUBKEY whenever `view` changes;
+  // an explicit subtab click always wins over that default for the handful
+  // of subtabs that share a view with another subtab (see explicitClickRef).
+  const [activeSub, setActiveSub] = useState({});
+  const explicitClickRef = useRef(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const currentGroupKey = VIEW_TO_GROUP[view] || null;
+
+  useEffect(() => {
+    if (explicitClickRef.current) return;
+    const group = VIEW_TO_GROUP[view];
+    const subKey = VIEW_TO_DEFAULT_SUBKEY[view];
+    if (group && subKey) setActiveSub((s) => (s[group] === subKey ? s : { ...s, [group]: subKey }));
+  }, [view]);
+  // Clears the "just clicked a subtab" flag after every render (not just
+  // ones where `view` changed) -- e.g. clicking between Decision Plan and
+  // Verification Center never changes `view` (both point at "decisionPlan"),
+  // so the effect above never runs to consume the flag itself. Without this,
+  // the flag could stay stuck "true" and incorrectly suppress the next
+  // legitimate default-subtab sync for an unrelated navigation.
+  useEffect(() => { explicitClickRef.current = false; });
+
+  // Subtab-bar click: navigate to the subtab's page and, if it carries an
+  // `entry` hint, bump the matching one-shot entry signal so that page lands
+  // on the right internal tab/mode.
+  const openSection = useCallback((groupKey, sub) => {
+    explicitClickRef.current = true;
+    setActiveSub((s) => ({ ...s, [groupKey]: sub.key }));
+    if (sub.entry?.mode !== undefined) setMajorsEntry((e) => ({ mode: sub.entry.mode, nonce: e.nonce + 1 }));
+    if (sub.entry?.sub !== undefined) setDecisionPlanEntry((e) => ({ sub: sub.entry.sub, nonce: e.nonce + 1 }));
+    if (sub.entry?.section !== undefined) setPathwaysEntry((e) => ({ section: sub.entry.section, nonce: e.nonce + 1 }));
+    goTo(sub.view);
+  }, [goTo]);
+
+  // Top-level button click: groups with subtabs jump to their first/default
+  // subtab (unless that group is already active -- then it's a no-op, the
+  // subtab bar is already showing); standalone tabs (Dashboard/Profile/My
+  // List) navigate directly.
+  const openTopLevel = useCallback((sec) => {
+    if (sec.subtabs) {
+      if (currentGroupKey !== sec.key) openSection(sec.key, sec.subtabs[0]);
+    } else {
+      explicitClickRef.current = true;
+      goTo(sec.view);
+    }
+    setMobileMenuOpen(false);
+  }, [currentGroupKey, openSection, goTo]);
   const [profile, setProfile] = useState(BLANK_PROFILE);
   // Track id requested from Advisor's "Run Matches for this track" -- preselects
   // the scenario when Matches opens.
@@ -267,15 +391,35 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
     <div className="shell">
       <header className="topbar">
         <div className="topbar-inner topbar-stack">
-          <div className="brand" role="button" onClick={() => setView("landing")} style={{ cursor: "pointer" }}>
-            <Logo />
-            <span>CollegeGene Navigator<small>A Real College, Program, Course, and Application Strategy Platform</small></span>
+          <div className="row spread" style={{ width: "100%", alignItems: "center" }}>
+            <div className="brand" role="button" onClick={() => setView("landing")} style={{ cursor: "pointer" }}>
+              <Logo />
+              <span>CollegeGene Navigator<small>A Real College, Program, Course, and Application Strategy Platform</small></span>
+            </div>
+            <button className="hamburger-btn" aria-label="Menu" aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen((v) => !v)}>
+              <span /><span /><span />
+            </button>
           </div>
+
           <nav className="nav nav-row">
-            {TABS.map(([k, label]) => (
-              <button key={k} className={view === k ? "active" : ""} onClick={() => goTo(k)}>{label}</button>
+            {SECTIONS.map((sec) => (
+              <button key={sec.key} className={currentGroupKey === sec.key ? "active" : ""} onClick={() => openTopLevel(sec)}>
+                {sec.label}
+              </button>
             ))}
           </nav>
+
+          {mobileMenuOpen && (
+            <div className="mobile-menu">
+              {SECTIONS.map((sec) => (
+                <button key={sec.key} className={currentGroupKey === sec.key ? "active" : ""} onClick={() => openTopLevel(sec)}>
+                  {sec.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {user && (
             <div className="user-menu" style={{ marginLeft: "auto" }}>
               <span className="user-email">
@@ -288,6 +432,17 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
       </header>
 
       <main className="container">
+        {currentGroupKey && SECTIONS.find((s) => s.key === currentGroupKey)?.subtabs && (
+          <nav className="nav subnav">
+            {SECTIONS.find((s) => s.key === currentGroupKey).subtabs.map((st) => (
+              <button key={st.key}
+                className={(activeSub[currentGroupKey] || SECTIONS.find((s) => s.key === currentGroupKey).subtabs[0].key) === st.key ? "active" : ""}
+                onClick={() => openSection(currentGroupKey, st)}>
+                {st.label}
+              </button>
+            ))}
+          </nav>
+        )}
         <ErrorBoundary resetKey={view}>
           {view === "landing" && <Landing onStart={() => setView("profile")} onAbout={() => setView("about")} />}
           {view === "about" && <About onGo={setView} />}
@@ -297,8 +452,9 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
             onResetProfile={(blank) => { bumpProfile(blank); api.saveStudent(STUDENT_ID, blank).catch(() => {}); }} />}
           {view === "courses" && <Courses onOpen={setDetailId} studentId={STUDENT_ID} profile={profile} initialTrackId={courseTrackId} />}
           {view === "info" && <Info profileInterests={profile.interests} />}
-          {view === "dashboard" && <Dashboard profile={profile} saved={saved} recs={recs} onGo={setView} />}
-          {view === "majors" && <Majors profile={profile} studentId={STUDENT_ID} onOpen={setDetailId} onToggleSave={toggleSave} savedIds={savedIds} />}
+          {view === "dashboard" && <Dashboard profile={profile} saved={saved} recs={recs} studentId={STUDENT_ID} onGo={goTo} />}
+          {view === "majors" && <Majors profile={profile} studentId={STUDENT_ID} onOpen={setDetailId} onToggleSave={toggleSave} savedIds={savedIds}
+            entryMode={majorsEntry.mode} entryNonce={majorsEntry.nonce} />}
           {view === "strategy" && <Strategy studentId={STUDENT_ID} profile={profile} onGo={setView} />}
 
           {view === "matches" && (
@@ -323,11 +479,19 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
           )}
 
           {view === "programs" && <Programs studentId={STUDENT_ID} profile={profile} saved={saved} />}
-          {view === "decisionPlan" && <DecisionPlan studentId={STUDENT_ID} profile={profile} saved={saved} collegeNames={collegeNames} onGo={goTo} />}
-          {view === "applicationPathways" && <ApplicationPathways studentId={STUDENT_ID} saved={saved} collegeNames={collegeNames} onGo={goTo} focusCollegeId={view === "applicationPathways" ? focusCollegeId : null} />}
+          {view === "decisionPlan" && <DecisionPlan studentId={STUDENT_ID} profile={profile} saved={saved} collegeNames={collegeNames} onGo={goTo}
+            entrySub={decisionPlanEntry.sub} entryNonce={decisionPlanEntry.nonce} />}
+          {view === "applicationPathways" && <ApplicationPathways studentId={STUDENT_ID} saved={saved} collegeNames={collegeNames} onGo={goTo} focusCollegeId={view === "applicationPathways" ? focusCollegeId : null}
+            focusSection={pathwaysEntry.section} focusSectionNonce={pathwaysEntry.nonce} />}
           {view === "essays" && <EssayCenter studentId={STUDENT_ID} saved={saved} collegeNames={collegeNames} onGo={goTo} focusCollegeId={view === "essays" ? focusCollegeId : null} />}
 
           {view === "applications" && <Applications studentId={STUDENT_ID} list={saved} collegeNames={collegeNames} profile={profile} onGo={setView} />}
+          {view === "financialAid" && <FinancialAid studentId={STUDENT_ID} profile={profile} initialTab="planner" />}
+          {view === "scholarships" && <FinancialAid studentId={STUDENT_ID} profile={profile} initialTab="scholarships" />}
+          {view === "portalTracker" && <PortalTracker onGo={goTo} />}
+          {view === "help" && <HelpPanel onGo={goTo} />}
+          {view === "export" && <ExportHub onGo={goTo} />}
+          {view === "settings" && <SettingsPanel user={user} studentId={STUDENT_ID} onSignOut={() => signOut().catch(() => {})} />}
           {view === "advisor" && <Advisor profile={profile} recs={recs} onRunMatches={(trackId) => {
             setAdvisorTrackId(trackId);
             // Run/re-run recommendations if none are loaded yet or the profile is
@@ -383,6 +547,105 @@ function Landing({ onStart, onAbout }) {
 
       <div className="note" style={{ textAlign: "center" }}>
         Planning aid only, not a guarantee. <button className="link" onClick={onAbout}>Read how it works &amp; full disclaimer -&gt;</button>
+      </div>
+    </div>
+  );
+}
+
+// More -> Help. New in this navigation reorg: a short map of where things
+// moved, since the top nav just went from 16 items to 7 families. Static
+// text only -- no app data, nothing to get wrong.
+function HelpPanel({ onGo }) {
+  const rows = [
+    ["Explore", "Matches, Browse Colleges, Majors, Double Major Search, Programs & Opportunities, Courses & Prep, Advisor"],
+    ["My List", "My Colleges, Import Colleges, Compare"],
+    ["Plan", "Decision Plan, Journey, Verification Center, Final List Health Check, Strategy, Cost, Scholarships & Honors, Visits / Interest"],
+    ["Apply", "Application Pathways, Timeline, Essays, Applications Tracker, Recommendations, Portal Tracker, Financial Aid"],
+    ["More", "Info, Help, Disclaimer, Export, Settings"],
+  ];
+  return (
+    <div className="stack">
+      <div>
+        <div className="eyebrow">More</div>
+        <h1>Help</h1>
+        <p className="lead">Nothing was removed -- every page you used before still exists, just grouped under
+          one of the 7 tabs above instead of one long row.</p>
+      </div>
+      <div className="card pad stack">
+        <h3>Where things moved</h3>
+        {rows.map(([g, list]) => (
+          <div key={g}><div className="note" style={{ fontWeight: 600 }}>{g}</div><p className="note">{list}</p></div>
+        ))}
+      </div>
+      <div className="card pad stack">
+        <h3>Still stuck?</h3>
+        <p className="note">See <button className="link" onClick={() => onGo && onGo("about")}>How CollegeGene Navigator works</button> for
+          a full walkthrough, or talk to your school counselor for guidance specific to your situation.</p>
+      </div>
+    </div>
+  );
+}
+
+// More -> Export. CSV export already existed on several individual pages
+// (Decision Plan, Verification Center, Applications Tracker, Timeline &
+// Tasks, Scholarship tracker) before this reorg and still does, unchanged --
+// this is just an honest directory of those existing buttons in one place,
+// not a new bulk-export system.
+function ExportHub({ onGo }) {
+  const exports = [
+    ["Decision Plan", "Final list, categories, program verification, cost, and strategy notes.", "decisionPlan"],
+    ["Verification Center", "Every open verification item across your list.", "decisionPlan"],
+    ["Timeline & Tasks", "Deadline/notification events and Decision Plan tasks.", "decisionPlan"],
+    ["Applications Tracker", "Per-college application status and dates.", "applications"],
+    ["Scholarship tracker", "Every scholarship you're tracking.", "scholarships"],
+  ];
+  return (
+    <div className="stack">
+      <div>
+        <div className="eyebrow">More</div>
+        <h1>Export</h1>
+        <p className="lead">Every CSV export in the app, in one place. Each one is still an "Export CSV" button on
+          its own page -- open the page to download.</p>
+      </div>
+      <div className="stack">
+        {exports.map(([title, desc, view]) => (
+          <div key={title} className="card pad row spread" style={{ alignItems: "center" }}>
+            <div><h3 style={{ marginBottom: 2 }}>{title}</h3><p className="note">{desc}</p></div>
+            <button className="btn ghost" onClick={() => onGo && onGo(view)}>Open →</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// More -> Settings. Account info already lived in the topbar (email + sign
+// out); this mirrors it as its own page so it's reachable from the More
+// group too, plus a plain-language note on data isolation (each signed-in
+// family only ever sees their own Firebase UID's data -- unchanged by this
+// reorg).
+function SettingsPanel({ user, studentId, onSignOut }) {
+  return (
+    <div className="stack">
+      <div>
+        <div className="eyebrow">More</div>
+        <h1>Settings</h1>
+      </div>
+      <div className="card pad stack">
+        <h3>Account</h3>
+        {user ? (
+          <>
+            <p className="note">Signed in as <strong>{user.email || user.displayName || "user"}</strong>.</p>
+            <button className="btn ghost" style={{ alignSelf: "flex-start" }} onClick={onSignOut}>Sign out</button>
+          </>
+        ) : (
+          <p className="note">Not signed in -- using a local, unauthenticated profile ({studentId}). Sign in to sync your data across devices.</p>
+        )}
+      </div>
+      <div className="card pad stack">
+        <h3>Your data</h3>
+        <p className="note">Your profile, saved colleges, and every plan/tracker page are stored under your own
+          account and are never shared with or visible to any other signed-in family.</p>
       </div>
     </div>
   );

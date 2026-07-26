@@ -9,6 +9,7 @@ import { api } from "../lib/api.js";
 import { auth, firebaseConfigured } from "../lib/firebase.js";
 import { SetupPlanningButton, InlineSpinner, RestoredNote } from "./ui.jsx";
 import { usePersistedSearch } from "../lib/persistedSearch.js";
+import { useEntryOverride } from "../lib/entryOverride.js";
 
 const CATEGORY_OPTS = ["", "Dream / Lottery", "Reach", "Target", "Safety", "Financial Safety", "In-state Anchor"];
 const DECISION_OPTS = ["Keep", "Maybe", "Remove", "Need to verify", "Applied", "Accepted", "Rejected", "Waitlisted"];
@@ -35,8 +36,13 @@ function Sub({ tabs, value, onChange }) {
   );
 }
 
-export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo }) {
+export function DecisionPlan({ studentId, profile, saved, collegeNames, onGo, entrySub, entryNonce }) {
   const [sub, setSub] = useState("list");
+  // Plan navigation: "Visits / Interest" opens this same page, landed on the
+  // Timeline & Tasks sub-tab (task type "Visit / info session" already lives
+  // there) rather than a new page. Runs once per explicit subtab click --
+  // never fires on a plain reload or the old "decisionPlan" route.
+  useEntryOverride(entrySub, entryNonce, (wantSub) => setSub(wantSub));
   const [items, setItems] = useState([]);
   const [options, setOptions] = useState(null);
   const [expanded, setExpanded] = useState(null);

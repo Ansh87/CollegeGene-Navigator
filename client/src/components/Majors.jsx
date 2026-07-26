@@ -5,6 +5,7 @@ import { api } from "../lib/api.js";
 import { Spinner, InlineSpinner, SourceBadge, SuccessNote, RestoredNote, ClearSearchButton, fmtUSD, fmtPct } from "./ui.jsx";
 import { US_STATES } from "../lib/states.js";
 import { usePersistedSearch } from "../lib/persistedSearch.js";
+import { useEntryOverride } from "../lib/entryOverride.js";
 
 const PROGRAM_TYPES = ["Major", "Minor", "Concentration", "Track", "Certificate", "Course cluster", "Graduate-only program", "Unknown"];
 const POLICY_TYPES = ["Double major", "Second major", "Additional major", "Dual degree", "Intercollege dual degree", "Major + minor", "Concentration only", "Not allowed", "Unknown"];
@@ -15,7 +16,7 @@ const VERIFICATION_STATUSES = ["Official source verified", "User verified", "Nee
 const norm = (s) => String(s || "").toLowerCase().trim();
 function verificationKey(collegeId, primary, secondary) { return `${collegeId}::${norm(primary)}::${norm(secondary)}`; }
 
-export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
+export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds, entryMode, entryNonce }) {
   const [majors, setMajors] = useState([]);
   const [doubles, setDoubles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +97,17 @@ export function Majors({ profile, studentId, onOpen, onToggleSave, savedIds }) {
       prefilled.current = true;
     }
   }, [profile?.primaryMajor, profile?.secondaryMajor]);
+
+  // Explore navigation: the "Double Major Search" / "Majors" subtabs both
+  // open this same page (they always have -- Single/Double major is a toggle
+  // right here, not a separate page) but each subtab click can request a
+  // specific mode so the family lands on what they actually clicked. Runs
+  // once per explicit subtab click (see lib/entryOverride.js); never fires
+  // on a plain reload or on the old "majors" route with no group context.
+  useEntryOverride(entryMode === "double", entryNonce, (wantDouble) => {
+    setComboMode(wantDouble);
+    setTab("search");
+  });
 
   const resetSearch = () => {
     setMajorQuery(""); setMajor2Query(""); setStateFilter("");

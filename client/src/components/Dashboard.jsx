@@ -1,6 +1,14 @@
-// Dashboard.jsx — home overview: profile completeness, list balance, upcoming
-// deadlines, and recommended next steps. Pulls together the whole app.
-import React, { useMemo } from "react";
+// Dashboard.jsx — home overview: profile completeness, list balance, open
+// verification items, upcoming deadlines, essay workload, final list health,
+// and recommended next steps. Pulls together the whole app -- the family
+// command center. Every card below reads from data that already exists and
+// is already computed elsewhere (Decision Plan summary, Verification
+// Center, Decision Plan items) -- nothing here is a new formula or a new
+// fetch that duplicates logic; it's the same endpoints DecisionPlan.jsx
+// already calls, just surfaced one level up. Anything that fails to load or
+// comes back empty is shown as "Needs review," never guessed at.
+import React, { useMemo, useState, useEffect } from "react";
+import { api } from "../lib/api.js";
 import { CategoryTag } from "./ui.jsx";
 
 function completeness(p) {
@@ -18,7 +26,7 @@ function completeness(p) {
   return { pct: Math.round((done / checks.length) * 100), checks };
 }
 
-export function Dashboard({ profile, saved, recs, onGo }) {
+export function Dashboard({ profile, saved, recs, studentId, onGo }) {
   const comp = useMemo(() => completeness(profile), [profile]);
   const byCat = useMemo(() => {
     const c = { Reach: 0, Target: 0, Safety: 0 };
@@ -36,6 +44,55 @@ export function Dashboard({ profile, saved, recs, onGo }) {
     if (byCat.Reach > 6) tips.push("you have a lot of reaches; make sure targets and safeties are solid");
     return tips.length ? "Suggestion: " + tips.join("; ") + "." : "Nice — your list looks reasonably balanced across reach, target, and safety.";
   }, [saved, byCat]);
+
+  // Cross-page summary data (Verification Center, Decision Plan summary --
+  // which already includes Final List Health, tasks due/overdue, and essay
+  // coverage). Same endpoints DecisionPlan.jsx already uses; a failed fetch
+  // leaves the field null/undefined, which every card below renders as
+  // "Needs review" rather than a fabricated number.
+  const [verification, setVerification] = useState(undefined);
+  const [planSummary, setPlanSummary] = useState(undefined);
+  const [decisionItems, setDecisionItems] = useState(undefined);
+  useEffect(() => {
+    if (!studentId) return;
+    api.verificationCenter(studentId).then(setVerification).catch(() => setVerification(null));
+    api.decisionPlanSummary(studentId).then(setPlanSummary).catch(() => setPlanSummary(null));
+    api.listDecisionItems(studentId).then((r) => setDecisionItems(r.items || [])).catch(() => setDecisionItems(null));
+  }, [studentId, saved.length]);
+
+  // "Next recommended actions" -- every condition below reuses a value
+  // that's already computed above or by an existing backend summary (no new
+  // thresholds invented for this dashboard). undefined = still loading,
+  // null = failed to load ("Needs review"); both are handled explicitly.
+  const nextActions = useMemo(() => {
+    const actions = [];
+    if (comp.pct < 100) actions.push({ label: "Profile incomplete", detail: `${comp.pct}% complete`, go: "profile" });
+    if (!saved.length) actions.push({ label: "No colleges saved yet", detail: "Run Matches or Browse Colleges to start a list", go: "matches" });
+
+    if (verification === null) actions.push({ label: "Verification items", detail: "Needs review — couldn't load", go: "decisionPlan" });
+    else if (verification && verification.totalItems > 0) actions.push({ label: "Verification items open", detail: `${verification.totalItems} open item(s)`, go: "decisionPlan" });
+
+    if (planSummary === null) actions.push({ label: "Deadlines", detail: "Needs review — couldn't load", go: "decisionPlan" });
+    else if (planSummary) {
+      if (planSummary.tasks?.overdue > 0) actions.push({ label: "Tasks overdue", detail: `${planSummary.tasks.overdue} overdue`, go: "decisionPlan" });
+      else if (planSummary.tasks?.dueSoon > 0) actions.push({ label: "Upcoming deadlines", detail: `${planSummary.tasks.dueSoon} due in the next 14 days`, go: "decisionPlan" });
+      if (planSummary.essayCoverageMissing > 0) actions.push({ label: "Essay prompts missing", detail: `${planSummary.essayCoverageMissing} college(s) with no essays tracked`, go: "essays" });
+      if (planSummary.timelineMissing > 0) actions.push({ label: "Application timeline missing", detail: `${planSummary.timelineMissing} college(s)`, go: "applicationPathways" });
+      if (planSummary.finalListHealth && planSummary.finalListHealth.overallStatus && planSummary.finalListHealth.overallStatus !== "Strong balanced list") {
+        actions.push({ label: "Final list is too reach-heavy", detail: planSummary.finalListHealth.overallStatus, go: "decisionPlan" });
+      }
+    }
+
+    if (decisionItems === null) actions.push({ label: "Net price calculators (NPC)", detail: "Needs review — couldn't load", go: "decisionPlan" });
+    else if (Array.isArray(decisionItems) && decisionItems.length) {
+      const npcNotDone = decisionItems.filter((it) => it.college_id && !it.npc_completed).length;
+      if (npcNotDone > 0) actions.push({ label: "NPC not completed", detail: `${npcNotDone} college(s)`, go: "decisionPlan" });
+    }
+
+    if (saved.length && byCat.Safety === 0) actions.push({ label: "Final list has no safety school", detail: "Add at least one you'd be happy to attend", go: "saved" });
+
+    return actions;
+  }, [comp.pct, saved.length, byCat.Safety, verification, planSummary, decisionItems]);
 
   return (
     <div className="stack">
@@ -93,6 +150,71 @@ export function Dashboard({ profile, saved, recs, onGo }) {
             {saved.length > 8 && <span className="note">+{saved.length - 8} more</span>}
           </div>
         )}
+      </div>
+
+      <div className="grid cols-2">
+        <div className="card pad stack">
+          <div className="row spread"><h3>Open verification items</h3><button className="btn ghost sm" onClick={() => onGo("decisionPlan")}>Verification Center →</button></div>
+          {verification === undefined && <p className="note">Loading…</p>}
+          {verification === null && <p className="note">Needs review — couldn't load right now.</p>}
+          {verification && (
+            <p className="note">{verification.totalItems > 0
+              ? `${verification.totalItems} open item(s) across ${verification.totalColleges} college(s).`
+              : "Nothing outstanding right now."}</p>
+          )}
+        </div>
+
+        <div className="card pad stack">
+          <div className="row spread"><h3>Upcoming deadlines</h3><button className="btn ghost sm" onClick={() => onGo("decisionPlan")}>Timeline & Tasks →</button></div>
+          {planSummary === undefined && <p className="note">Loading…</p>}
+          {planSummary === null && <p className="note">Needs review — couldn't load right now.</p>}
+          {planSummary && (
+            <p className="note">
+              {planSummary.tasks?.overdue > 0 && <strong style={{ color: "var(--reach)" }}>{planSummary.tasks.overdue} overdue. </strong>}
+              {planSummary.tasks?.dueSoon > 0 ? `${planSummary.tasks.dueSoon} due in the next 14 days.` : (!planSummary.tasks?.overdue ? "Nothing due in the next 14 days." : "")}
+              {planSummary.earliestUpcomingDeadline ? ` Earliest on file: ${planSummary.earliestUpcomingDeadline}.` : ""}
+            </p>
+          )}
+        </div>
+
+        <div className="card pad stack">
+          <div className="row spread"><h3>Essay workload</h3><button className="btn ghost sm" onClick={() => onGo("essays")}>Essays →</button></div>
+          {planSummary === undefined && <p className="note">Loading…</p>}
+          {planSummary === null && <p className="note">Needs review — couldn't load right now.</p>}
+          {planSummary && (
+            <p className="note">{planSummary.totalEssaysTracked ?? 0} essay(s) tracked.
+              {planSummary.essayCoverageMissing > 0 ? ` ${planSummary.essayCoverageMissing} college(s) have none tracked yet.` : ""}</p>
+          )}
+        </div>
+
+        <div className="card pad stack">
+          <div className="row spread"><h3>Final list health</h3><button className="btn ghost sm" onClick={() => onGo("decisionPlan")}>Final List Health Check →</button></div>
+          {planSummary === undefined && <p className="note">Loading…</p>}
+          {planSummary === null && <p className="note">Needs review — couldn't load right now.</p>}
+          {planSummary && !planSummary.finalListHealth && <p className="note">Add colleges to your Decision Plan to see a health check.</p>}
+          {planSummary?.finalListHealth && (
+            <p className="note">
+              <span className="pill" style={{ marginRight: 6 }}>{planSummary.finalListHealth.overallStatus}</span>
+              {planSummary.finalListHealth.messages?.[0]}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="card pad stack">
+        <h3>Next recommended actions</h3>
+        {(verification === undefined || planSummary === undefined || decisionItems === undefined) && !nextActions.length && (
+          <p className="note">Loading…</p>
+        )}
+        {!nextActions.length && verification !== undefined && planSummary !== undefined && decisionItems !== undefined && (
+          <p className="note">Nothing urgent right now — nice work.</p>
+        )}
+        {nextActions.map((a, i) => (
+          <div key={i} className="row spread" style={{ padding: "6px 0", borderBottom: i < nextActions.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+            <div><div style={{ fontWeight: 600, fontSize: 13.5 }}>{a.label}</div><div className="note">{a.detail}</div></div>
+            <button className="btn ghost sm" onClick={() => onGo(a.go)}>Open →</button>
+          </div>
+        ))}
       </div>
 
       <div className="disclaimer">

@@ -14,6 +14,18 @@ export function About({ onGo }) {
       </div>
 
       <div className="card pad stack">
+        <h3>Finding your way around</h3>
+        <p className="note">The top menu has 7 tabs: <strong>Dashboard</strong> (your home/command center),
+          <strong> Profile</strong>, <strong>Explore</strong> (Matches, Browse Colleges, Majors, Double Major
+          Search, Programs &amp; Opportunities, Courses &amp; Prep, Advisor), <strong>My List</strong> (My Colleges,
+          Import Colleges, Compare), <strong>Plan</strong> (Decision Plan, Journey, Verification Center, Final List
+          Health Check, Strategy, Cost, Scholarships &amp; Honors, Visits / Interest), <strong>Apply</strong>
+          (Application Pathways, Timeline, Essays, Applications Tracker, Recommendations, Portal Tracker, Financial
+          Aid), and <strong>More</strong> (Info, Help, Disclaimer, Export, Settings). Click a tab to see its subtabs
+          underneath. Nothing described below moved out of the app -- only how it's grouped changed.</p>
+      </div>
+
+      <div className="card pad stack">
         <h3>1. Build your profile</h3>
         <p className="note">Enter academics (GPA, SAT/ACT, rigor, rank), interests, budget, and goals -- or upload a
           transcript/resume and let the app help fill it in. The more complete the profile, the more accurate
@@ -25,46 +37,57 @@ export function About({ onGo }) {
         <p className="note">The app pulls real colleges from the U.S. Department of Education College Scorecard and
           scores each one across academic fit, cost, career outcomes, and extracurricular strength -- sorted into
           <strong> Reach</strong>, <strong>Target</strong>, and <strong>Safety</strong> as ranges, never false
-          precision. Save the ones you like to <strong>My List</strong>.</p>
+          precision. Find this under <strong>Explore -&gt; Matches</strong> (Best Fit and Balanced List views) or
+          <strong> Explore -&gt; Browse Colleges</strong>. Save the ones you like to <strong>My List</strong>, where
+          "Evaluate Against My Profile" re-scores every saved college -- including imported ones -- and shows
+          Fit/Admit/Est. cost/Major fit on each card.</p>
       </div>
 
       <div className="card pad stack">
         <h3>3. Research programs &amp; opportunities</h3>
-        <p className="note">The <strong>Programs &amp; Opportunities</strong> tab looks beyond just majors --
-          minors, honors/scholars programs, research opportunities, and other special programs -- using College
-          Scorecard data plus official college sources you or the app add. Every record shows its source, when it
-          was last checked, and whether it still needs manual verification. Program discovery may be incomplete;
-          always verify final decisions on official college websites.</p>
+        <p className="note">The <strong>Explore -&gt; Programs &amp; Opportunities</strong> subtab looks beyond just
+          majors -- minors, honors/scholars programs, research opportunities, and other special programs -- using
+          College Scorecard data plus official college sources you or the app add. Every record shows its source,
+          when it was last checked, and whether it still needs manual verification. Program discovery may be
+          incomplete; always verify final decisions on official college websites.</p>
       </div>
 
       <div className="card pad stack">
         <h3>4. Build a real Decision Plan</h3>
-        <p className="note">The <strong>Decision Plan</strong> tab is the family's working area: a final application
-          list by category, a program verification checklist, major-specific admission risk, cost tracking,
-          auto-generated strategy notes, a task/deadline tracker, and CSV export.</p>
+        <p className="note">The <strong>Plan -&gt; Decision Plan</strong> subtab is the family's working area: a
+          final application list by category, a program verification checklist, major-specific admission risk, cost
+          tracking, auto-generated strategy notes, a task/deadline tracker, and CSV export. The same page also
+          surfaces the <strong>Verification Center</strong> (every open verification item across your list) and the
+          <strong> Final List Health Check</strong> (balance, risk, cost, workload) -- both reachable directly from
+          the <strong>Plan</strong> subtab bar. <strong>Plan -&gt; Strategy</strong> gives whole-list strategy and
+          early-action/early-decision guidance; <strong>Plan -&gt; Scholarships &amp; Honors</strong> tracks the
+          scholarships you find.</p>
       </div>
 
       <div className="card pad stack">
         <h3>5. Plan applications and essays</h3>
-        <p className="note">The <strong>Application Pathways</strong> tab starts with the <strong>Application Timeline</strong>
-          -- pull real deadline, notification, and enrollment dates for a saved college with one click, either from a
-          small set of hand-verified reference colleges (instant, source-cited) or a live, bounded search of that
-          college's own official site as a fallback. The <strong>Route Planner</strong> groups your list by
-          application platform and lets you set a platform in one step, which automatically pulls in the dates (and,
-          for a growing list of reference colleges, application-detail fields like test policy, fee, and whether an
-          interview/portfolio/recommendation is required) into your application record. The <strong>Essay
-          Center</strong> tracks each college's essay prompts the same way -- reference-first for a small set of
-          verified colleges, live official-site search as the fallback -- plus generic (never copied or invented)
-          brainstorming aids by track, and links to colleges' own published sample essays where they exist. The
-          <strong> Advisor</strong> chat answers essay questions only from prompts you've actually tracked -- it
-          never guesses a college's prompt wording.</p>
+        <p className="note">The <strong>Apply -&gt; Application Pathways</strong> subtab starts with the
+          <strong> Timeline</strong> section -- pull real deadline, notification, and enrollment dates for a saved
+          college with one click, either from a small set of hand-verified reference colleges (instant,
+          source-cited) or a live, bounded search of that college's own official site as a fallback. The Route
+          Planner groups your list by application platform and lets you set a platform in one step, which
+          automatically pulls in the dates (and, for a growing list of reference colleges, application-detail
+          fields like test policy, fee, and whether an interview/portfolio/recommendation is required) into your
+          application record. <strong>Apply -&gt; Essays</strong> tracks each college's essay prompts the same way
+          -- reference-first for a small set of verified colleges, live official-site search as the fallback --
+          plus generic (never copied or invented) brainstorming aids by track, and links to colleges' own published
+          sample essays where they exist. <strong>Apply -&gt; Applications Tracker</strong> is your day-to-day
+          checklist (essays, recommendations, deadlines, submitted status); <strong>Apply -&gt; Financial
+          Aid</strong> covers FAFSA/CSS Profile planning. The <strong>Explore -&gt; Advisor</strong> chat answers
+          essay questions only from prompts you've actually tracked -- it never guesses a college's prompt wording.</p>
       </div>
 
       <div className="card pad stack">
         <h3>6. Explore majors, courses &amp; careers</h3>
         <p className="note">See where a major leads using U.S. Bureau of Labor Statistics career data. The
-          <strong> Majors</strong> tab includes a double-major planner. The <strong>Courses</strong> tab gives
-          track-based preparation guidance as well as a per-college program browser.</p>
+          <strong> Explore -&gt; Majors</strong> subtab includes a double-major planner (also reachable directly as
+          <strong> Explore -&gt; Double Major Search</strong>). <strong>Explore -&gt; Courses &amp; Prep</strong>
+          gives track-based preparation guidance as well as a per-college program browser.</p>
       </div>
 
       <div className="card pad stack">

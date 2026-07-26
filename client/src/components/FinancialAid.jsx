@@ -24,8 +24,13 @@ const BLANK = { name: "", provider: "", amount: "", deadline: "", renewable: "",
 
 const STATUSES = ["Researching", "Planning to apply", "In progress", "Submitted", "Awarded", "Not selected", "Skipped"];
 
-export function FinancialAid({ studentId, profile }) {
-  const [tab, setTab] = useState("planner");
+export function FinancialAid({ studentId, profile, initialTab }) {
+  // initialTab lets a caller (e.g. Plan -> Scholarships & Honors) open this
+  // same component landed on its Scholarship tracker instead of the Aid
+  // planner, without changing anything about either tool. Defaults to
+  // "planner" exactly as before when no initialTab is given (e.g. the
+  // existing Applications -> Financial Aid & Scholarships entry point).
+  const [tab, setTab] = useState(initialTab === "scholarships" ? "scholarships" : "planner");
   return (
     <div className="stack">
       <div>
