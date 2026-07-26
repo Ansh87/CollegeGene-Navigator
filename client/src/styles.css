@@ -61,9 +61,16 @@ body {
 .topbar-stack { flex-direction: column; align-items: flex-start; gap: 12px; }
 .nav-row { margin-left: 0 !important; width: 100%; border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
 .brand { display: flex; align-items: center; gap: 11px; font-family: var(--serif); font-weight: 600; font-size: 19px; letter-spacing: .2px; color: #fff; }
-.brand small { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; color: #8fb4d4; text-transform: uppercase; display: block; margin-top: -2px; }
+/* NOTE: display is intentionally NOT set here -- `.brand-desc-desktop` /
+   `.brand-desc-mobile` below own `display` so their specificity (equal to
+   each other) decides visibility instead of being overridden by this
+   descendant selector's higher specificity. */
+.brand small { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; color: #8fb4d4; text-transform: uppercase; margin-top: -2px; }
 /* Mobile tagline is swapped in (and the desktop one hidden) only inside the
-   max-width:820px query below -- desktop keeps the full description. */
+   max-width:820px query below -- desktop keeps the full description. Both
+   set an explicit `display` at the same specificity as their media-query
+   overrides so the cascade (not `.brand small` above) decides visibility. */
+.brand-desc-desktop { display: block; }
 .brand-desc-mobile { display: none; }
 .nav { display: flex; gap: 2px; flex-wrap: nowrap; margin-left: auto; }
 
@@ -199,6 +206,22 @@ table.t th { text-align: left; font-family: var(--mono); font-size: 11px; letter
 table.t td { padding: 9px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
 table.t tr:hover td { background: #fffaf0; }
 
+/* Generic scroll-fallback wrapper for any plain data table: on narrow/
+   intermediate widths the table scrolls sideways *inside its own card*
+   instead of widening the whole page. Safe to apply to any table (no
+   dependency on data-label attributes), unlike .timeline-table below. */
+.table-wrap { overflow-x: auto; max-width: 100%; }
+.table-wrap table { min-width: 480px; }
+
+/* ---------- Application Timeline table: desktop table -> mobile cards ----------
+   Desktop/tablet: normal table, but wrapped so it scrolls inside its card
+   instead of widening the page if it ever doesn't fit. Mobile (<=820px):
+   each <tr> becomes a self-contained card and each <td> stacks its
+   data-label (set in ApplicationPathways.jsx) above its value -- see the
+   media query below for the actual conversion. */
+.timeline-table-wrap { overflow-x: auto; max-width: 100%; }
+.timeline-table { min-width: 640px; }
+
 /* ---------- disclaimers / notes ---------- */
 .note { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 .disclaimer { border-left: 3px solid var(--amber); background: #fbf6ea; padding: 12px 14px; border-radius: 0 8px 8px 0; font-size: 12.5px; color: #5d5333; line-height: 1.55; }
@@ -233,8 +256,17 @@ table.t tr:hover td { background: #fffaf0; }
   .brand-desc-desktop { display: none; }
   .brand-desc-mobile { display: block; }
   /* Top menu: always-visible horizontal scrollable row directly below the
-     tagline (no hamburger, no vertical dropdown). */
-  .nav.nav-row { display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-left: 0; width: 100%; }
+     tagline (no hamburger, no vertical dropdown). Slightly lighter
+     background than the header bar so the nav row reads as its own strip. */
+  .nav.nav-row {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    /* .nav-row (base rule above) sets margin-left:0 !important, so this must
+       match !important too to actually bleed the background to the edges. */
+    margin-left: -20px !important; margin-right: -20px; width: auto; padding: 8px 20px;
+    background: rgba(255,255,255,.06);
+    border-top: 1px solid rgba(255,255,255,.08);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
   /* Hide the signed-in-as / sign out controls to save header space; the same
      account info and sign-out action are still available in Settings. */
   .topbar .user-menu { display: none; }
@@ -242,6 +274,52 @@ table.t tr:hover td { background: #fffaf0; }
   .subnav { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 12px; }
   .cols-2, .cols-3 { grid-template-columns: 1fr !important; }
   .banner { padding: 18px; }
+
+  /* Page-level overflow guard, scoped to the Apply/Application Pathways &
+     Timeline page (.apply-page, set on its root element in
+     ApplicationPathways.jsx) rather than applied globally -- flex/grid
+     children default to a content-based min-width, which is how a long
+     select or table row can silently widen the whole page on a phone. Kept
+     scoped so it can't change layout on other pages that weren't reviewed
+     for this fix. */
+  .apply-page, .apply-page .card, .apply-page .stack, .apply-page .grid,
+  .apply-page .row, .apply-page .field { min-width: 0; max-width: 100%; }
+  .apply-page .row { flex-wrap: wrap; }
+  .apply-page .row > * { min-width: 0; }
+  .apply-page .note, .apply-page .lead, .apply-page .field .v { overflow-wrap: anywhere; }
+
+  /* Application Timeline table -> stacked mobile cards. Each <tr> becomes a
+     bordered card; each <td> stacks its data-label (see ApplicationPathways.jsx)
+     above its value. Functionality/data/behavior are unchanged -- layout only. */
+  .timeline-table-wrap { overflow-x: visible; }
+  .timeline-table { min-width: 0; width: 100%; }
+  .timeline-table thead { display: none; }
+  .timeline-table, .timeline-table tbody, .timeline-table tr, .timeline-table td {
+    display: block; width: 100%; max-width: 100%;
+  }
+  .timeline-table tr {
+    border: 1px solid var(--line-2); border-radius: var(--radius);
+    padding: 10px 12px; margin-bottom: 12px; background: var(--card);
+  }
+  .timeline-table tr:last-child { margin-bottom: 0; }
+  .timeline-table td {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding: 8px 0 !important; border-bottom: 1px dashed var(--line-2); min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .timeline-table td:last-child { border-bottom: 0; padding-top: 10px !important; }
+  .timeline-table td::before {
+    content: attr(data-label); font-family: var(--mono); font-size: 10.5px; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--muted); font-weight: 600;
+  }
+  .timeline-table td.no-label::before { content: none; }
+  .timeline-table td select.inp { width: 100% !important; min-width: 0 !important; }
+
+  /* "Add timeline event manually" / "Add an application record" cards: keep
+     inputs/selects/buttons from forcing the card wider than the viewport.
+     Scoped to .apply-page, same reasoning as above. */
+  .apply-page .card.pad { min-width: 0; }
+  .apply-page .card.pad .btn { flex: 1 1 auto; }
 }
 .cols-2 { grid-template-columns: 1fr 1fr; }
 .cols-3 { grid-template-columns: 1fr 1fr 1fr; }

@@ -396,7 +396,7 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
             <div className="brand" role="button" onClick={() => setView("landing")} style={{ cursor: "pointer" }}>
               <Logo />
               <span>CollegeGene Navigator
-                <small className="brand-desc-desktop">A Real College, Program, Course, and Application Strategy Platform</small>
+                <small className="brand-desc-desktop">A College, Program, Course, and Application Strategy Platform</small>
                 <small className="brand-desc-mobile">College Planning Hub</small>
               </span>
             </div>
