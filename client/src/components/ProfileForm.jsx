@@ -380,12 +380,17 @@ export function ProfileForm({ initial, onSubmit, studentId, onApplyParsed, onSav
         </div>
       </div>
 
-      <div className="row wrap" style={{ gap: 10 }}>
-        <button className="btn primary" onClick={() => onSubmit(p)} disabled={!ready}>See my college matches →</button>
-        <button className="btn ghost" style={{ marginLeft: "auto" }} onClick={() => { const sp = { ...SAMPLE_PROFILE }; setP(sp); onLoadSample ? onLoadSample(sp) : onSave?.(sp); }}>Load sample profile</button>
-        <button className="btn ghost" onClick={() => { onSave?.(p); setSavedMsg("Profile saved."); setTimeout(() => setSavedMsg(null), 2500); }}>Save profile</button>
+      {/* profile-action-* classes only matter on mobile (see styles.css) --
+          they reorder this row into "Sample / Save / Reset" on one line
+          then "See my college matches" full-width below, via CSS `order`
+          and flex-basis. Desktop keeps this exact DOM order + marginLeft:auto
+          push-right layout, untouched. */}
+      <div className="row wrap profile-actions" style={{ gap: 10 }}>
+        <button className="btn primary profile-action-submit" onClick={() => onSubmit(p)} disabled={!ready}>See my college matches →</button>
+        <button className="btn ghost profile-action-sample" style={{ marginLeft: "auto" }} onClick={() => { const sp = { ...SAMPLE_PROFILE }; setP(sp); onLoadSample ? onLoadSample(sp) : onSave?.(sp); }}>Load sample profile</button>
+        <button className="btn ghost profile-action-save" onClick={() => { onSave?.(p); setSavedMsg("Profile saved."); setTimeout(() => setSavedMsg(null), 2500); }}>Save profile</button>
         {onResetProfile && (
-          <button className="btn ghost" style={{ color: "var(--reach)" }}
+          <button className="btn ghost profile-action-reset" style={{ color: "var(--reach)" }}
             onClick={() => { if (confirm("Reset your profile to blank? This clears the fields you've entered here. Your saved college list and tracker are NOT affected.")) { const blank = { ...BLANK_PROFILE }; setP(blank); onResetProfile(blank); } }}>
             Reset profile
           </button>
