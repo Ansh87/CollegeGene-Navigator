@@ -173,7 +173,6 @@ export default function App() {
   // of subtabs that share a view with another subtab (see explicitClickRef).
   const [activeSub, setActiveSub] = useState({});
   const explicitClickRef = useRef(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const currentGroupKey = VIEW_TO_GROUP[view] || null;
 
@@ -214,7 +213,6 @@ export default function App() {
       explicitClickRef.current = true;
       goTo(sec.view);
     }
-    setMobileMenuOpen(false);
   }, [currentGroupKey, openSection, goTo]);
   const [profile, setProfile] = useState(BLANK_PROFILE);
   // Track id requested from Advisor's "Run Matches for this track" -- preselects
@@ -397,12 +395,11 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
           <div className="row spread" style={{ width: "100%", alignItems: "center" }}>
             <div className="brand" role="button" onClick={() => setView("landing")} style={{ cursor: "pointer" }}>
               <Logo />
-              <span>CollegeGene Navigator<small>A Real College, Program, Course, and Application Strategy Platform</small></span>
+              <span>CollegeGene Navigator
+                <small className="brand-desc-desktop">A Real College, Program, Course, and Application Strategy Platform</small>
+                <small className="brand-desc-mobile">College Planning Hub</small>
+              </span>
             </div>
-            <button className="hamburger-btn" aria-label="Menu" aria-expanded={mobileMenuOpen}
-              onClick={() => setMobileMenuOpen((v) => !v)}>
-              <span /><span /><span />
-            </button>
           </div>
 
           <nav className="nav nav-row">
@@ -412,16 +409,6 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
               </button>
             ))}
           </nav>
-
-          {mobileMenuOpen && (
-            <div className="mobile-menu">
-              {SECTIONS.map((sec) => (
-                <button key={sec.key} className={currentGroupKey === sec.key ? "active" : ""} onClick={() => openTopLevel(sec)}>
-                  {sec.label}
-                </button>
-              ))}
-            </div>
-          )}
 
           {user && (
             <div className="user-menu" style={{ marginLeft: "auto" }}>
