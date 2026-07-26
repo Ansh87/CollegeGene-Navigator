@@ -28,11 +28,11 @@ const STEPS = [
 function Flow() {
   const steps = ["Profile", "Explore", "My List", "Plan", "Apply"];
   return (
-    <div className="row wrap" style={{ gap: 8, alignItems: "center", justifyContent: "center" }}>
+    <div className="row wrap about-flow" style={{ gap: 8, alignItems: "center", justifyContent: "center" }}>
       {steps.map((s, i) => (
         <React.Fragment key={s}>
           <span className="pill" style={{ fontSize: 13, padding: "6px 12px" }}>{s}</span>
-          {i < steps.length - 1 && <span style={{ color: "var(--muted)" }} aria-hidden>→</span>}
+          {i < steps.length - 1 && <span className="about-flow-arrow" style={{ color: "var(--muted)" }} aria-hidden>→</span>}
         </React.Fragment>
       ))}
     </div>
@@ -54,7 +54,7 @@ export function About({ onGo }) {
 
       {/* 2. Quick action buttons */}
       {onGo && (
-        <div className="row wrap" style={{ gap: 10 }}>
+        <div className="row wrap about-actions" style={{ gap: 10 }}>
           <button className="btn amber" onClick={go("profile")}>Start with Profile →</button>
           <button className="btn ghost" onClick={go("advisor")}>Open Advisor →</button>
           <button className="btn ghost" onClick={go("saved")}>Go to My List →</button>

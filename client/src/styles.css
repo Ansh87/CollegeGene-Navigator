@@ -254,9 +254,21 @@ table.t tr:hover td { background: #fffaf0; }
   /* Subtab row still fits on one scrollable line -- no crowding, just scroll. */
   .subnav { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 12px; }
   .cols-2, .cols-3 { grid-template-columns: 1fr !important; }
+  .banner { padding: 18px; }
 }
 .cols-2 { grid-template-columns: 1fr 1fr; }
 .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+@media (max-width: 480px) {
+  /* About page quick actions: full-width stacked buttons are easier to tap
+     than a wrapped row of variable-width pills on a phone screen. */
+  .about-actions .btn { flex: 1 1 100%; text-align: center; }
+  /* About page flow diagram: a horizontal Profile -> Explore -> ... row runs
+     out of room on a phone and wraps mid-arrow, which looks broken. Stack it
+     vertically instead, rotating the arrow glyph to point down. */
+  .about-flow { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .about-flow .about-flow-arrow { display: block; transform: rotate(90deg); margin-left: 10px; }
+}
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 :focus-visible { outline: 2px solid #d9b262; outline-offset: 2px; }
