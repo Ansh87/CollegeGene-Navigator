@@ -261,12 +261,26 @@ table.t tr:hover td { background: #fffaf0; }
   .nav.nav-row {
     display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
     /* .nav-row (base rule above) sets margin-left:0 !important, so this must
-       match !important too to actually bleed the background to the edges. */
-    margin-left: -20px !important; margin-right: -20px; width: auto; padding: 8px 20px;
+       match !important too to actually bleed the background to the edges.
+       IMPORTANT: width must stay a *definite* value (100% of the parent,
+       plus the 40px bled into via the negative margins) -- NOT `auto`.
+       Under this row's parent's `align-items:flex-start`, `width:auto` on a
+       flex item resolves to fit-content, so the box would just grow to fit
+       all 7 buttons (wider than the phone) and overflow past the screen
+       edge with nothing left to scroll *inside* -- which is what silently
+       hid "Apply"/"More" off-screen before this fix. A definite width keeps
+       overflow-x:auto's scroll region correctly capped at the viewport. */
+    margin-left: -20px !important; margin-right: -20px; width: calc(100% + 40px); padding: 8px 20px;
     background: rgba(255,255,255,.06);
     border-top: 1px solid rgba(255,255,255,.08);
     border-bottom: 1px solid rgba(255,255,255,.06);
   }
+  /* Prevent buttons from shrinking to fit -- that would make the row *look*
+     like it fits without scrolling while actually squashing/truncating
+     labels. Keeping their natural size is what makes the row genuinely
+     overflow (by design) so swiping reveals Apply/More, and keeps the
+     active item's highlight fully legible. */
+  .nav.nav-row button { flex: 0 0 auto; }
   /* Hide the signed-in-as / sign out controls to save header space; the same
      account info and sign-out action are still available in Settings. */
   .topbar .user-menu { display: none; }
@@ -335,6 +349,29 @@ table.t tr:hover td { background: #fffaf0; }
      all timelines" results table): scrolls inside its own card on narrow
      screens instead of widening the page. */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Profile page action row (ProfileForm.jsx): desktop keeps its normal DOM
+     order + marginLeft:auto push-right layout untouched. On mobile only,
+     reflow via `order` + flex-basis into "Load sample / Save / Reset" as
+     one evenly-split row, then "See my college matches" full-width below --
+     no DOM changes needed, so desktop functionality/order is unaffected. */
+  .profile-actions { flex-wrap: wrap; gap: 8px 6px; }
+  .profile-actions .profile-action-sample,
+  .profile-actions .profile-action-save,
+  .profile-actions .profile-action-reset {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    margin-left: 0 !important; /* cancel desktop's push-right marginLeft:auto */
+    padding-left: 6px; padding-right: 6px;
+    font-size: 12.5px;
+    text-align: center;
+  }
+  .profile-actions .profile-action-submit {
+    order: 2;
+    flex: 1 1 100%;
+    width: 100%;
+  }
 }
 .cols-2 { grid-template-columns: 1fr 1fr; }
 .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
