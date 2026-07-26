@@ -24,8 +24,7 @@ export function PortalTracker({ onGo }) {
           Open Applications Tracker →
         </button>
       </div>
-      <div className="disclaimer">Needs review: this is a known gap, not a removed feature — nothing about
-        post-submission portals was tracked here before this reorganization either.</div>
+      <div className="disclaimer">Needs review: there is no post-submission portal tracker yet.</div>
     </div>
   );
 }

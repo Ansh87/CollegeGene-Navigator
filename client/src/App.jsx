@@ -14,7 +14,6 @@ import { Strategy } from "./components/Strategy.jsx";
 import { Matches } from "./components/Matches.jsx";
 import { BrowseColleges } from "./components/BrowseColleges.jsx";
 import { MyList } from "./components/MyList.jsx";
-import { Info } from "./components/Info.jsx";
 import { Applications } from "./components/Applications.jsx";
 import { Programs } from "./components/Programs.jsx";
 import { DecisionPlan } from "./components/DecisionPlan.jsx";
@@ -23,6 +22,10 @@ import { EssayCenter } from "./components/EssayCenter.jsx";
 import { FinancialAid } from "./components/FinancialAid.jsx";
 import { PortalTracker } from "./components/PortalTracker.jsx";
 import { About } from "./components/About.jsx";
+import { Disclaimer } from "./components/Disclaimer.jsx";
+import { Settings } from "./components/Settings.jsx";
+import { CareerPlanner } from "./components/CareerPlanner.jsx";
+import { Careers } from "./components/Careers.jsx";
 import { Journey } from "./components/Journey.jsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { mergeParsedIntoProfile } from "./lib/profileMerge.js";
@@ -101,6 +104,8 @@ const SECTIONS = [
       { key: "cost", label: "Cost", view: "decisionPlan" },
       { key: "scholarships", label: "Scholarships & Honors", view: "scholarships" },
       { key: "visits", label: "Visits / Interest", view: "decisionPlan", entry: { sub: "tasks" } },
+      { key: "careerPlanner", label: "Career Planner", view: "careerPlanner" },
+      { key: "careersBLS", label: "Careers (BLS)", view: "careersBLS" },
     ],
   },
   {
@@ -118,10 +123,8 @@ const SECTIONS = [
   {
     key: "more", label: "More",
     subtabs: [
-      { key: "info", label: "Info", view: "info" },
-      { key: "help", label: "Help", view: "help" },
-      { key: "disclaimer", label: "Disclaimer", view: "about" },
-      { key: "export", label: "Export", view: "export" },
+      { key: "about", label: "About", view: "about" },
+      { key: "disclaimer", label: "Disclaimer", view: "disclaimer" },
       { key: "settings", label: "Settings", view: "settings" },
     ],
   },
@@ -446,12 +449,15 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
         <ErrorBoundary resetKey={view}>
           {view === "landing" && <Landing onStart={() => setView("profile")} onAbout={() => setView("about")} />}
           {view === "about" && <About onGo={setView} />}
+          {view === "disclaimer" && <Disclaimer />}
           {view === "journey" && <Journey studentId={STUDENT_ID} profile={profile} saved={saved} onGo={goTo} />}
           {view === "profile" && <ProfileForm initial={profile} onSubmit={onSubmitProfile} studentId={STUDENT_ID} onApplyParsed={applyParsed} applyMsg={applyMsg} profileVersion={profileVersion} onLoadSample={(sp) => { bumpProfile(sp); api.saveStudent(STUDENT_ID, sp).catch(() => {}); }}
             onSave={(p) => { setProfile(p); api.saveStudent(STUDENT_ID, p).catch(() => {}); }}
             onResetProfile={(blank) => { bumpProfile(blank); api.saveStudent(STUDENT_ID, blank).catch(() => {}); }} />}
           {view === "courses" && <Courses onOpen={setDetailId} studentId={STUDENT_ID} profile={profile} initialTrackId={courseTrackId} />}
-          {view === "info" && <Info profileInterests={profile.interests} />}
+          {/* Old "info" links still work -- Info's own subtabs (Career Planner,
+              Careers BLS) now live under Plan; its "About" subtab is this page. */}
+          {view === "info" && <About onGo={setView} />}
           {view === "dashboard" && <Dashboard profile={profile} saved={saved} recs={recs} studentId={STUDENT_ID} onGo={goTo} />}
           {view === "majors" && <Majors profile={profile} studentId={STUDENT_ID} onOpen={setDetailId} onToggleSave={toggleSave} savedIds={savedIds}
             entryMode={majorsEntry.mode} entryNonce={majorsEntry.nonce} />}
@@ -489,9 +495,9 @@ function prettyField(k) { return FIELD_LABELS[k] || k; }
           {view === "financialAid" && <FinancialAid studentId={STUDENT_ID} profile={profile} initialTab="planner" />}
           {view === "scholarships" && <FinancialAid studentId={STUDENT_ID} profile={profile} initialTab="scholarships" />}
           {view === "portalTracker" && <PortalTracker onGo={goTo} />}
-          {view === "help" && <HelpPanel onGo={goTo} />}
-          {view === "export" && <ExportHub onGo={goTo} />}
-          {view === "settings" && <SettingsPanel user={user} studentId={STUDENT_ID} onSignOut={() => signOut().catch(() => {})} />}
+          {view === "careerPlanner" && <CareerPlanner />}
+          {view === "careersBLS" && <Careers profileInterests={profile.interests} />}
+          {view === "settings" && <Settings user={user} studentId={STUDENT_ID} onSignOut={() => signOut().catch(() => {})} onGo={goTo} />}
           {view === "advisor" && <Advisor profile={profile} recs={recs} onRunMatches={(trackId) => {
             setAdvisorTrackId(trackId);
             // Run/re-run recommendations if none are loaded yet or the profile is
@@ -552,101 +558,3 @@ function Landing({ onStart, onAbout }) {
   );
 }
 
-// More -> Help. New in this navigation reorg: a short map of where things
-// moved, since the top nav just went from 16 items to 7 families. Static
-// text only -- no app data, nothing to get wrong.
-function HelpPanel({ onGo }) {
-  const rows = [
-    ["Explore", "Matches, Browse Colleges, Majors, Double Major Search, Programs & Opportunities, Courses & Prep, Advisor"],
-    ["My List", "My Colleges, Import Colleges, Compare"],
-    ["Plan", "Decision Plan, Journey, Verification Center, Final List Health Check, Strategy, Cost, Scholarships & Honors, Visits / Interest"],
-    ["Apply", "Application Pathways, Timeline, Essays, Applications Tracker, Recommendations, Portal Tracker, Financial Aid"],
-    ["More", "Info, Help, Disclaimer, Export, Settings"],
-  ];
-  return (
-    <div className="stack">
-      <div>
-        <div className="eyebrow">More</div>
-        <h1>Help</h1>
-        <p className="lead">Nothing was removed -- every page you used before still exists, just grouped under
-          one of the 7 tabs above instead of one long row.</p>
-      </div>
-      <div className="card pad stack">
-        <h3>Where things moved</h3>
-        {rows.map(([g, list]) => (
-          <div key={g}><div className="note" style={{ fontWeight: 600 }}>{g}</div><p className="note">{list}</p></div>
-        ))}
-      </div>
-      <div className="card pad stack">
-        <h3>Still stuck?</h3>
-        <p className="note">See <button className="link" onClick={() => onGo && onGo("about")}>How CollegeGene Navigator works</button> for
-          a full walkthrough, or talk to your school counselor for guidance specific to your situation.</p>
-      </div>
-    </div>
-  );
-}
-
-// More -> Export. CSV export already existed on several individual pages
-// (Decision Plan, Verification Center, Applications Tracker, Timeline &
-// Tasks, Scholarship tracker) before this reorg and still does, unchanged --
-// this is just an honest directory of those existing buttons in one place,
-// not a new bulk-export system.
-function ExportHub({ onGo }) {
-  const exports = [
-    ["Decision Plan", "Final list, categories, program verification, cost, and strategy notes.", "decisionPlan"],
-    ["Verification Center", "Every open verification item across your list.", "decisionPlan"],
-    ["Timeline & Tasks", "Deadline/notification events and Decision Plan tasks.", "decisionPlan"],
-    ["Applications Tracker", "Per-college application status and dates.", "applications"],
-    ["Scholarship tracker", "Every scholarship you're tracking.", "scholarships"],
-  ];
-  return (
-    <div className="stack">
-      <div>
-        <div className="eyebrow">More</div>
-        <h1>Export</h1>
-        <p className="lead">Every CSV export in the app, in one place. Each one is still an "Export CSV" button on
-          its own page -- open the page to download.</p>
-      </div>
-      <div className="stack">
-        {exports.map(([title, desc, view]) => (
-          <div key={title} className="card pad row spread" style={{ alignItems: "center" }}>
-            <div><h3 style={{ marginBottom: 2 }}>{title}</h3><p className="note">{desc}</p></div>
-            <button className="btn ghost" onClick={() => onGo && onGo(view)}>Open →</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// More -> Settings. Account info already lived in the topbar (email + sign
-// out); this mirrors it as its own page so it's reachable from the More
-// group too, plus a plain-language note on data isolation (each signed-in
-// family only ever sees their own Firebase UID's data -- unchanged by this
-// reorg).
-function SettingsPanel({ user, studentId, onSignOut }) {
-  return (
-    <div className="stack">
-      <div>
-        <div className="eyebrow">More</div>
-        <h1>Settings</h1>
-      </div>
-      <div className="card pad stack">
-        <h3>Account</h3>
-        {user ? (
-          <>
-            <p className="note">Signed in as <strong>{user.email || user.displayName || "user"}</strong>.</p>
-            <button className="btn ghost" style={{ alignSelf: "flex-start" }} onClick={onSignOut}>Sign out</button>
-          </>
-        ) : (
-          <p className="note">Not signed in -- using a local, unauthenticated profile ({studentId}). Sign in to sync your data across devices.</p>
-        )}
-      </div>
-      <div className="card pad stack">
-        <h3>Your data</h3>
-        <p className="note">Your profile, saved colleges, and every plan/tracker page are stored under your own
-          account and are never shared with or visible to any other signed-in family.</p>
-      </div>
-    </div>
-  );
-}

@@ -115,3 +115,15 @@ export function restoredNoteText(restoredFrom) {
   if (!restoredFrom) return null;
   return restoredFrom === "local" ? "Last search restored." : "Showing your saved search results.";
 }
+
+// Settings -> Local Saved Searches: a device-only clear, deliberately
+// separate from the hook's own clear() above. clear() (used by each page's
+// own "Clear search" button) removes BOTH layers, including the server copy
+// -- appropriate when the family is on that page and means it. This helper
+// only ever removes the localStorage copy on THIS browser/device, exactly
+// matching Settings' "controls search results saved on this device" scope --
+// it never touches the server-side saved_search_sessions row, so the same
+// search is still there if the family opens the app on another device.
+export function clearLocalSearch(uid, pageKey) {
+  removeLocal(uid, pageKey);
+}
