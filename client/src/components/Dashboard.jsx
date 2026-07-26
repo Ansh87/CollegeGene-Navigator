@@ -210,8 +210,8 @@ export function Dashboard({ profile, saved, recs, studentId, onGo }) {
           <p className="note">Nothing urgent right now — nice work.</p>
         )}
         {nextActions.map((a, i) => (
-          <div key={i} className="row spread" style={{ padding: "6px 0", borderBottom: i < nextActions.length - 1 ? "1px solid var(--line-2)" : "none" }}>
-            <div><div style={{ fontWeight: 600, fontSize: 13.5 }}>{a.label}</div><div className="note">{a.detail}</div></div>
+          <div key={i} className="row spread wrap" style={{ padding: "6px 0", borderBottom: i < nextActions.length - 1 ? "1px solid var(--line-2)" : "none", gap: 8 }}>
+            <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 13.5 }}>{a.label}</div><div className="note">{a.detail}</div></div>
             <button className="btn ghost sm" onClick={() => onGo(a.go)}>Open →</button>
           </div>
         ))}
