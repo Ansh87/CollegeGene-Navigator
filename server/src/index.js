@@ -6,6 +6,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config, keyStatus } from "./config.js";
 import "./db/database.js"; // ensure schema is created on boot
+// Load verified admissions/selection profiles (MIT, Stanford, etc.), careers,
+// and deadline data into the DB on every boot. Previously this only ran via a
+// manual `npm run import:verified` step, so any fresh/reset database (a new
+// deploy, a restart on a new DB) silently had none of this data even though
+// it's written right here in the codebase -- the "Admissions details" card
+// showed "No verified profile on file" for colleges that DO have one. The
+// import is an idempotent upsert, so running it on every boot just keeps the
+// DB in sync with these seed files; it can't duplicate or corrupt data.
+import "./db/importVerified.js";
 import { collegesRouter } from "./routes/colleges.js";
 import { careersRouter, studentRouter, advisorRouter } from "./routes/misc.js";
 import { debugRouter } from "./routes/debug.js";

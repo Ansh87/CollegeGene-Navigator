@@ -26,8 +26,9 @@ const V = (o) => ({
 });
 
 export const VERIFIED_SEED_2 = [
-  // Carnegie Mellon
-  V({ id: "201645", url: "https://www.cmu.edu/admission/", ed: true, ea: false, rd: true,
+  // Carnegie Mellon (real IPEDS/Scorecard UNITID is 211440 — 201645 is actually
+  // Case Western Reserve University; this was misassigned to CMU app-wide)
+  V({ id: "211440", url: "https://www.cmu.edu/admission/", ed: true, ea: false, rd: true,
       deadlines: { ED: "Nov 1", RD: "Jan 3" }, css: "Required (CSS Profile) — confirm",
       recs: "Counselor + teacher recommendation(s)", essays: "CMU-specific short essays + Common App essay",
       majorRestrictions: { note: "Admitted by individual college/program; School of Computer Science is separately, extremely competitive" },

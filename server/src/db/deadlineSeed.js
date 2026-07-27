@@ -61,7 +61,7 @@ export const DEADLINE_PROFILES = [
     notes: "Apply by Dec 1 EA for best scholarship and Honors College consideration. FAFSA only (no CSS).",
   },
   {
-    college_id: "201645", // Carnegie Mellon
+    college_id: "211440", // Carnegie Mellon (real IPEDS/Scorecard UNITID; 201645 is actually Case Western Reserve)
     application_deadlines_json: JSON.stringify({ ED: "Nov 2", RD: "Jan 4", "RD (Drama/Music)": "Dec 1" }),
     deadline_source_url: "https://www.cmu.edu/admission/admission/application-plans-deadlines",
     deadline_last_reviewed: "2026-07",

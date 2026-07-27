@@ -64,7 +64,7 @@ export const SELECTION_SEED = [
     source_year: 2025, last_reviewed: "2026-07", confidence_level: "verified",
   },
   {
-    college_id: "201645", // Carnegie Mellon
+    college_id: "211440", // Carnegie Mellon (real IPEDS/Scorecard UNITID; 201645 is actually Case Western Reserve)
     admit_factors_json: JSON.stringify(factors({ rigor: VI, gpa: VI, test: IMP, recs: IMP, essay: IMP, ec: IMP, talent: VI, character: IMP, firstGen: CON, interest: IMP, legacy: CON })),
     culture_json: JSON.stringify({ tags: ["pre-professional", "intense/rigorous", "tech + arts fusion", "collaborative within colleges"], size: "medium", vibe: "Known for depth and rigor in your chosen field; strong maker/tech culture plus a top drama/arts school. Work-hard reputation." }),
     what_they_want: "Demonstrated, focused excellence and commitment to the specific school/major you're applying to. CMU admits by college, so fit and preparation for that program (e.g. SCS for CS) matter enormously — they want applicants who are already deep in their area.",

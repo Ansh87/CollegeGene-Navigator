@@ -15,6 +15,7 @@ import { db } from "./database.js";
 import { OCCUPATIONS_SEED, MAJOR_SEED } from "./careerSeed.js";
 import { SELECTION_SEED } from "./selectionSeed.js";
 import { VERIFIED_SEED_2 } from "./verifiedSeed2.js";
+import { VERIFIED_SEED_3 } from "./verifiedSeed3.js";
 import { importDeadlineProfiles } from "./deadlineSeed.js";
 
 const now = Date.now();
@@ -136,19 +137,40 @@ const insertSelection = db.prepare(
    ON CONFLICT(college_id) DO UPDATE SET ${selCols.filter(c=>c!=="college_id").map(c=>`${c}=excluded.${c}`).join(",")}`
 );
 
-db.exec("BEGIN");
+// This module used to only run when invoked directly (`npm run import:verified`).
+// That meant a fresh/reset database (e.g. a new Railway deploy, or any restart
+// that lands on a database without this data yet) silently had NO verified
+// admissions profiles at all -- every college's "Admissions details" card
+// showed the honest-but-unhelpful "No verified admissions profile on file"
+// empty state, including ones like MIT that DO have a real, sourced row
+// written right here in this file. The data existed in the codebase; it just
+// never made it into the running database unless someone remembered to run
+// the import script by hand.
+//
+// Fix: index.js now imports this module on every server boot. All inserts
+// below are upserts (ON CONFLICT ... DO UPDATE), so re-running this on every
+// restart is safe and idempotent -- it just keeps the DB in sync with
+// whatever is checked into these seed files, with no risk of duplicating or
+// corrupting rows. Failures are logged, not thrown, so a problem importing
+// this reference data can never take down the whole server.
 try {
-  for (const v of VERIFIED) insertVerified.run(v);
-  for (const v of VERIFIED_SEED_2) insertVerified.run(v);
-  for (const c of OCCUPATIONS_SEED) insertCareer.run({ ...c, last_updated: now });
-  for (const m of MAJOR_SEED) insertMajor.run({ ...m, last_updated: now });
-  for (const s of SELECTION_SEED) insertSelection.run(s);
-  db.exec("COMMIT");
+  db.exec("BEGIN");
+  try {
+    for (const v of VERIFIED) insertVerified.run(v);
+    for (const v of VERIFIED_SEED_2) insertVerified.run(v);
+    for (const v of VERIFIED_SEED_3) insertVerified.run(v);
+    for (const c of OCCUPATIONS_SEED) insertCareer.run({ ...c, last_updated: now });
+    for (const m of MAJOR_SEED) insertMajor.run({ ...m, last_updated: now });
+    for (const s of SELECTION_SEED) insertSelection.run(s);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+  const deadlineCount = importDeadlineProfiles(db);
+  console.log(`Imported ${VERIFIED.length + VERIFIED_SEED_2.length + VERIFIED_SEED_3.length} verified admissions profiles, ${SELECTION_SEED.length} selection profiles, ${OCCUPATIONS_SEED.length} careers, ${MAJOR_SEED.length} major mappings.`);
+  console.log(`Imported ${deadlineCount} verified deadline profiles.`);
+  console.log("Source labels and confidence levels stored. ED/EA/RD acceptance rates left null unless officially published.");
 } catch (e) {
-  db.exec("ROLLBACK");
-  throw e;
+  console.error("Verified-data import failed (non-fatal — server will still start):", e.message);
 }
-const deadlineCount = importDeadlineProfiles(db);
-console.log(`Imported ${VERIFIED.length + VERIFIED_SEED_2.length} verified admissions profiles, ${SELECTION_SEED.length} selection profiles, ${OCCUPATIONS_SEED.length} careers, ${MAJOR_SEED.length} major mappings.`);
-console.log(`Imported ${deadlineCount} verified deadline profiles.`);
-console.log("Source labels and confidence levels stored. ED/EA/RD acceptance rates left null unless officially published.");
