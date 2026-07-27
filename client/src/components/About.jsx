@@ -167,6 +167,24 @@ export function About({ onGo }) {
         </div>
 
         <div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Why a college's program list may look different from its own website</div>
+          <p className="note" style={{ margin: 0 }}>
+            The "undergraduate programs" list on the Courses &amp; Programs page comes from a live call to the U.S.
+            Department of Education College Scorecard API, which reports each college's official CIP (Classification
+            of Instructional Programs) codes — the standardized federal taxonomy every college reports annually to
+            IPEDS, used here so majors can be compared consistently across colleges. It is not scraped from the
+            college's own website. A college's own site typically organizes the same real majors by its own
+            department names or internal numbering (e.g. MIT's "Course" system) — a different, school-specific
+            scheme built for browsing its site, not for cross-college comparison. This app then groups the official
+            CIP titles into broad categories (Engineering, Computing &amp; Data, etc.) using simple keyword matching
+            on the title, purely to make the list easier to scan. The underlying majors are the same real, official
+            data either way; the labels and groupings you see can differ because the two systems serve different
+            purposes. If something looks off, the college's own admissions or department site is always the final
+            word — this list is a starting point for research, not a replacement for it.
+          </p>
+        </div>
+
+        <div>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Limitations and disclaimer</div>
           <p className="note" style={{ margin: 0 }}>
             This is a planning aid, not an admissions guarantee. Every score is an estimate built from official and
@@ -178,6 +196,32 @@ export function About({ onGo }) {
             {onGo && <> See the <button className="link" onClick={go("disclaimer")}>full disclaimer →</button> for complete terms.</>}
           </p>
         </div>
+      </div>
+
+      {/* 4.6. How Rankings Are Built -- a short companion note to "How Scoring
+          Works" above: that section covers your personal Overall Fit and
+          admission-likelihood numbers, this one covers the three curated/
+          ranked LISTS (Top STEM/Finance/Business, Best Fit, Balanced List)
+          and how each one decides what order colleges appear in. */}
+      <div className="card pad stack">
+        <h3>How Rankings Are Built</h3>
+        <p className="note" style={{ margin: 0 }}>
+          <strong>Top STEM / Finance / Business lists</strong> (Explore) are editorial rankings — a hand-curated
+          ordering of undergraduate program reputation and outcomes in that field, clearly labeled as editorial and
+          not an official government ranking. Each entry is enriched with live official College Scorecard data
+          (admission rate, SAT range, net price, earnings) and, when you have a Profile, your own Overall Fit score.
+        </p>
+        <p className="note" style={{ margin: 0 }}>
+          <strong>Best Fit</strong> (Matches) ranks the full matching college pool purely by score — your Overall Fit,
+          or a blended scenario score if a major/career scenario is active — and shows the top results. Because it
+          follows the score directly, it tends to be reach-heavy.
+        </p>
+        <p className="note" style={{ margin: 0 }}>
+          <strong>Balanced List</strong> (Matches) doesn't just take the top scores — it fills a realistic
+          Reach/Target/Safety mix (plus financial-safety and in-state-public slots where possible) for your chosen
+          list size. If your matches can't fill a category, it says so honestly rather than relabeling a school's
+          real category to make the numbers look complete.
+        </p>
       </div>
 
       {/* 5. Data and verification note */}
