@@ -745,6 +745,135 @@ export async function researchCollege(studentId, { collegeId, collegeName, track
 }
 
 // ---------------------------------------------------------------------------
+// Layer 4 — live official-site majors/departments scan (NOT persisted).
+//
+// Why this exists: the "All undergraduate programs" list elsewhere in this
+// app comes from College Scorecard's federal CIP taxonomy, which a college
+// reports to the Dept. of Education for every bachelor's program it grants.
+// That's real, government-verified data — but it's organized by federal
+// classification, not by how the college's own website groups its
+// departments/majors, so the two lists rarely read the same for the same
+// college (e.g. Scorecard may show "Nuclear Engineering" as its own CIP code
+// even though a college's site lists it under a combined department page).
+// Neither is wrong; they're just different lenses on the same real programs.
+//
+// This function gives families a way to see the college's OWN framing
+// directly: a bounded, robots-aware crawl of the college's real domain
+// (reusing the same fetch/robots/link primitives as the Layer 3 "Programs &
+// Opportunities" crawl above) that looks specifically for major/department
+// listing pages, and returns exactly what it found with a live link back to
+// each source page. Nothing is persisted to the database and nothing is
+// merged with the CIP list — it's a fresh, on-demand, side-by-side reference
+// so a family can literally click through and confirm for themselves. This
+// is inherently a heuristic best-effort scan (college websites are not
+// standardized), so it can miss things or occasionally pick up a
+// near-miss — every result carries its real source URL for that reason.
+const MAJOR_PAGE_URL_HINTS = [
+  "major", "majors", "department", "departments", "academics", "academic-programs",
+  "programs-of-study", "program-of-study", "fields-of-study", "undergraduate-majors",
+  "undergraduate-programs", "areas-of-study", "school-of", "college-of", "degrees",
+  "course-catalog", "catalog",
+];
+
+// A page whose TITLE matches one of these is very likely an actual
+// department/major page (as opposed to an admissions or news page that
+// merely mentions majors in passing).
+const MAJOR_TITLE_PATTERNS = [
+  /^department of /i, /^school of /i, /^college of /i,
+  /\bmajor(s)?\b/i, /\bb\.?s\.?\s*(in|,)/i, /\bb\.?a\.?\s*(in|,)/i,
+  /\bbachelor of /i, /\bundergraduate program(s)?\b/i, /\bconcentration(s)?\b/i,
+  /\bdegree program(s)?\b/i,
+];
+
+// Same junk-title exclusions as Layer 3 (apply,admissions,home,news,etc. are
+// never real department pages), reused rather than duplicated.
+function looksLikeMajorPage(url, title) {
+  if (isJunkTitle(title)) return false;
+  const hay = `${url}`.toLowerCase();
+  const hintedUrl = MAJOR_PAGE_URL_HINTS.some((h) => hay.includes(h));
+  const titleMatch = title ? MAJOR_TITLE_PATTERNS.some((re) => re.test(title)) : false;
+  return hintedUrl || titleMatch;
+}
+
+// Cleans a raw <title> tag down to a readable department/major name — strips
+// the usual " | University Name" / " - University Name" suffix noise.
+function cleanMajorTitle(title, collegeName) {
+  if (!title) return null;
+  let t = title.replace(/\s*[|\-–—]\s*.*$/, "").trim();
+  if (collegeName && t.toLowerCase() === collegeName.toLowerCase()) return null;
+  return t.length >= 3 && t.length <= 120 ? t : title.slice(0, 120);
+}
+
+function normalizeTitleKey(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Live, on-demand, NOT persisted. Caps mirror Layer 3 (same politeness
+// budget) but count separately since this is a distinct crawl run by a
+// distinct button, not chained after "Research this college".
+export async function scanOfficialSiteMajors({ collegeId, collegeName, domain, startUrl }) {
+  const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/.*/, "");
+  const start = startUrl && isSameOfficialDomain(startUrl, cleanDomain) ? startUrl : `https://${cleanDomain}/`;
+
+  const visited = new Set();
+  const queue = [{ url: start, depth: 0 }];
+  let pagesFetched = 0;
+  const seenTitles = new Set();
+  const found = [];
+  const MAX_PAGES = 40;
+  const MAX_DEPTH = 2;
+  const MAX_RESULTS = 80;
+
+  while (queue.length && pagesFetched < MAX_PAGES && found.length < MAX_RESULTS) {
+    const { url, depth } = queue.shift();
+    if (visited.has(url)) continue;
+    visited.add(url);
+    if (!isSameOfficialDomain(url, cleanDomain) || isPdfUrl(url)) continue;
+
+    const allowed = await isAllowedByRobots(url).catch(() => true);
+    if (!allowed) continue;
+
+    let page;
+    try { page = await fetchPage(url); } catch { continue; }
+    pagesFetched++;
+
+    if (page.ok && page.html) {
+      const $ = cheerio.load(page.html);
+      $("script,style,nav,footer,noscript").remove();
+      const rawTitle = ($("title").first().text() || $("h1").first().text() || "").trim().slice(0, 200) || null;
+
+      if (looksLikeMajorPage(url, rawTitle)) {
+        const cleaned = cleanMajorTitle(rawTitle, collegeName);
+        const key = normalizeTitleKey(cleaned);
+        if (cleaned && key && !seenTitles.has(key)) {
+          seenTitles.add(key);
+          found.push({ title: cleaned, url });
+        }
+      }
+
+      if (depth < MAX_DEPTH) {
+        const links = extractLinks(page.html, page.url || url).filter((l) => isSameOfficialDomain(l, cleanDomain));
+        for (const l of links) {
+          if (!visited.has(l) && queue.length + pagesFetched < MAX_PAGES * 3) queue.push({ url: l, depth: depth + 1 });
+        }
+      }
+    }
+    await sleep(CRAWL_DELAY_MS);
+  }
+
+  return {
+    domain: cleanDomain,
+    pagesFetched,
+    maxPages: MAX_PAGES,
+    majorsFound: found.length,
+    majors: found,
+    note: found.length
+      ? `Found ${found.length} department/major page${found.length === 1 ? "" : "s"} on ${cleanDomain}. This is a best-effort scan of the college's own site, not an official or complete catalog — click through to confirm.`
+      : `No clear department/major pages were found within a ${MAX_PAGES}-page scan of ${cleanDomain}. Some colleges list majors under a structure this scan doesn't recognize, or require JavaScript to render — open the site directly to check.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Shared crawl primitives, exported for reuse by other bounded-discovery
 // features (e.g. Essay Center's "Find essay prompts", services/essayCenter.js)
 // so they don't duplicate fetch/robots/link-extraction logic. Purely additive

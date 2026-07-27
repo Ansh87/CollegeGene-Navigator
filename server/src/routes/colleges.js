@@ -7,6 +7,7 @@ import { getVerified } from "../services/verified.js";
 import { db } from "../db/database.js";
 import { config } from "../config.js";
 import { programNotesFor } from "../db/programsSeed.js";
+import { scanOfficialSiteMajors } from "../services/programDiscovery.js";
 
 // IPEDS/Scorecard IDs of the 8 Ivy League universities.
 const IVY_IDS = new Set(["166027","190150","215062","217156","130794","182670","186131","190415"]);
@@ -607,6 +608,16 @@ collegesRouter.get("/:id/programs", async (req, res) => {
     if (!official && !notes) {
       return res.json({ available: false, note: "Program data isn't available for this college right now. Confirm majors on the college's official site." });
     }
+    // Cross-check link: this CIP list is organized by federal taxonomy, not by
+    // the college's own department/major page structure, so the two rarely
+    // read the same. Surface the college's actual site so a family can open it
+    // side by side and confirm for themselves, rather than trusting a list
+    // that has no visible link back to a source they can check.
+    let officialWebsiteUrl = null;
+    try {
+      const found = await getCollegeById(req.params.id);
+      officialWebsiteUrl = found?.college?.websiteUrl || null;
+    } catch { /* non-critical -- program list still renders without the link */ }
     res.json({
       available: true,
       id: req.params.id,
@@ -616,8 +627,30 @@ collegesRouter.get("/:id/programs", async (req, res) => {
       programs: official?.programs || [],
       suggestedCombinations: official?.programs ? suggestCombinations(official.programs) : [],
       verifiedCombinationNotes: notes || null,
-      disclaimer: "College Scorecard field-of-study data indicates program availability, but formal double-major rules must be confirmed with the college's official catalog or advising office.",
+      officialWebsiteUrl,
+      disclaimer: "College Scorecard field-of-study data indicates program availability, but formal double-major rules must be confirmed with the college's official catalog or advising office. This federal CIP list is organized differently than a college's own department/major pages -- both are real, but they won't always match program-for-program.",
     });
+  } catch (err) { honestError(res, err); }
+});
+
+// GET /api/colleges/:id/programs/official-site -> live, on-demand, NOT
+// persisted scan of the college's own domain for department/major pages, as
+// a direct comparison alongside the federal CIP list above. See
+// services/programDiscovery.js's Layer 4 comment for the full rationale.
+collegesRouter.get("/:id/programs/official-site", async (req, res) => {
+  try {
+    const found = await getCollegeById(req.params.id).catch(() => null);
+    const websiteUrl = found?.college?.websiteUrl || null;
+    const collegeName = found?.college?.name || null;
+    if (!websiteUrl) {
+      return res.json({
+        available: false,
+        note: "No official website is on file for this college in College Scorecard, so this scan can't run. Open the college's site directly to check its majors.",
+      });
+    }
+    const domain = websiteUrl.replace(/^https?:\/\//, "").replace(/\/.*/, "");
+    const result = await scanOfficialSiteMajors({ collegeId: req.params.id, collegeName, domain, startUrl: websiteUrl });
+    res.json({ available: true, collegeName, officialWebsiteUrl: websiteUrl, ...result });
   } catch (err) { honestError(res, err); }
 });
 

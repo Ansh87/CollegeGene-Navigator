@@ -133,6 +133,10 @@ export const api = {
     }).then(j),
   buildProfileFromDocs: (id) => afetch(`/api/documents/${id}/build-profile`, { method: "POST" }).then(j),
   programs: (id) => afetch(`/api/colleges/${id}/programs`).then(j),
+  // Live, on-demand scan of the college's OWN website for its department/major
+  // pages -- a direct comparison next to the federal CIP list above. Not
+  // persisted; re-run any time for a fresh look.
+  officialSitePrograms: (id) => afetch(`/api/colleges/${id}/programs/official-site`).then(j),
   similarColleges: (id) => afetch(`/api/colleges/${id}/similar`).then(j),
   recommendMajors: (profile) =>
     afetch("/api/careers/recommend-majors", {

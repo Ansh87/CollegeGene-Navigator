@@ -18,6 +18,9 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
   const [programs, setPrograms] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
+  const [siteScan, setSiteScan] = useState(null);
+  const [siteScanLoading, setSiteScanLoading] = useState(false);
+  const [siteScanErr, setSiteScanErr] = useState(null);
 
   // Issue 1: keep the searched college name, results, picked college, and
   // its loaded programs on screen across navigation/refresh/logout-login.
@@ -48,9 +51,18 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
 
   const pick = async (c) => {
     setSelected(c); setPrograms(null); setLoading(true); setErr(null);
+    setSiteScan(null); setSiteScanErr(null);
     try { setPrograms(await api.programs(c.id)); }
     catch (e) { setErr(e); }
     finally { setLoading(false); }
+  };
+
+  const scanSite = async () => {
+    if (!selected) return;
+    setSiteScanLoading(true); setSiteScanErr(null);
+    try { setSiteScan(await api.officialSitePrograms(selected.id)); }
+    catch (e) { setSiteScanErr(e); }
+    finally { setSiteScanLoading(false); }
   };
 
   // group programs by broad area for readability
@@ -157,7 +169,13 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
                   <div className="row spread" style={{ marginBottom: 8 }}>
                     <h3>All undergraduate programs</h3><SourceBadge level="official">Scorecard</SourceBadge>
                   </div>
-                  <div className="note" style={{ marginBottom: 10 }}>{programs.programs.length} bachelor's programs · Source: {programs.source}, {programs.sourceYear}</div>
+                  <div className="note" style={{ marginBottom: 4 }}>{programs.programs.length} bachelor's programs · Source: {programs.source}, {programs.sourceYear}</div>
+                  <div className="note" style={{ marginBottom: 10 }}>
+                    This is the federal government's program taxonomy, not {selected.name}'s own department page — titles and groupings won't always match the college's own website.
+                    {programs.officialWebsiteUrl && (
+                      <> <a className="link" href={programs.officialWebsiteUrl} target="_blank" rel="noreferrer">Compare with {selected.name}'s official site ↗</a></>
+                    )}
+                  </div>
                   {Object.entries(grouped).map(([area, list]) => (
                     <details key={area} style={{ marginBottom: 8 }}>
                       <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 14 }}>{area} <span className="note">({list.length})</span></summary>
@@ -172,6 +190,48 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
               )}
 
               <div className="disclaimer">{programs.disclaimer}</div>
+
+              {/* Layer 4: live scan of the college's own site, shown separately
+                  from the CIP list above so the two are never confused. */}
+              <div className="card pad stack">
+                <div className="row spread" style={{ marginBottom: 4 }}>
+                  <h3>From {selected.name}'s own website</h3><SourceBadge level="official">Live scan</SourceBadge>
+                </div>
+                <p className="note">
+                  A direct, on-demand scan of {programs.officialWebsiteUrl ? <a className="link" href={programs.officialWebsiteUrl} target="_blank" rel="noreferrer">{selected.name}'s official site</a> : "the college's official site"} for its own
+                  department/major pages — a different lens than the federal list above. Not saved anywhere; run it fresh any time. Best-effort only, so treat gaps
+                  or misses as "check the site directly," not "doesn't exist."
+                </p>
+                <button className="btn ghost sm" onClick={scanSite} disabled={siteScanLoading} style={{ alignSelf: "flex-start" }}>
+                  {siteScanLoading ? "Scanning…" : siteScan ? "Scan again" : `Scan ${selected.name}'s site for majors`}
+                </button>
+
+                {siteScanLoading && <Spinner label={`Scanning ${selected.name}'s official site (this can take up to ~30s)…`} />}
+                {siteScanErr && <ErrorNote onRetry={scanSite}>{siteScanErr.message}</ErrorNote>}
+
+                {siteScan && !siteScan.available && (
+                  <p className="note">{siteScan.note}</p>
+                )}
+
+                {siteScan?.available && (
+                  <>
+                    <div className="note">
+                      Scanned {siteScan.pagesFetched} page{siteScan.pagesFetched === 1 ? "" : "s"} of {siteScan.domain} (up to {siteScan.maxPages}) · found {siteScan.majorsFound} department/major page{siteScan.majorsFound === 1 ? "" : "s"}
+                    </div>
+                    {siteScan.majors.length > 0 ? (
+                      <div className="stack" style={{ gap: 4 }}>
+                        {siteScan.majors.map((m) => (
+                          <a key={m.url} className="link" href={m.url} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                            {m.title} ↗
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="note">{siteScan.note}</p>
+                    )}
+                  </>
+                )}
+              </div>
             </>
           )}
         </div>
