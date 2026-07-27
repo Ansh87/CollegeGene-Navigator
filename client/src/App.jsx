@@ -86,7 +86,11 @@ const SECTIONS = [
       { key: "matches", label: "Matches", view: "matches" },
       { key: "browse", label: "Browse Colleges", view: "browse" },
       { key: "majors", label: "Majors", view: "majors" },
-      { key: "doubleMajor", label: "Double Major Search", view: "majors", entry: { mode: "double" } },
+      // "Double Major Search" (nav-consolidation, 2026-07): removed as a
+      // separate top-nav entry -- it showed the same Majors page as
+      // "Majors" above, just pre-toggled to its internal Double-major mode.
+      // The feature itself is unchanged: Majors.jsx still has its own
+      // Single/Double major toggle right on the page.
       { key: "programs", label: "Programs & Opportunities", view: "programs" },
       { key: "courses", label: "Courses & Prep", view: "courses" },
       { key: "advisor", label: "Advisor", view: "advisor" },
@@ -95,28 +99,32 @@ const SECTIONS = [
   { key: "saved", label: "My List", view: "saved" },
   {
     key: "plan", label: "Plan",
+    // Nav-consolidation (2026-07): Verification Center / Final List Health
+    // Check / Cost / Visits & Interest all pointed at this same Decision
+    // Plan page (just a different internal section), so they're removed as
+    // separate top-nav entries here -- nothing was deleted, Decision Plan's
+    // own internal tabs still cover all of it.
     subtabs: [
       { key: "decisionPlan", label: "Decision Plan", view: "decisionPlan" },
       { key: "journey", label: "Journey", view: "journey" },
-      { key: "verificationCenter", label: "Verification Center", view: "decisionPlan" },
-      { key: "finalListHealth", label: "Final List Health Check", view: "decisionPlan" },
       { key: "strategy", label: "Strategy", view: "strategy" },
-      { key: "cost", label: "Cost", view: "decisionPlan" },
       { key: "scholarships", label: "Scholarships & Honors", view: "scholarships" },
-      { key: "visits", label: "Visits / Interest", view: "decisionPlan", entry: { sub: "tasks" } },
       { key: "careerPlanner", label: "Career Planner", view: "careerPlanner" },
       { key: "careersBLS", label: "Careers (BLS)", view: "careersBLS" },
     ],
   },
   {
     key: "apply", label: "Apply",
+    // Nav-consolidation (2026-07): "Timeline" was a duplicate entry point
+    // into this same page (just auto-scrolled to its Timeline section, which
+    // is still right here); "Recommendations" pointed at the same page as
+    // "Applications Tracker"; "Portal Tracker" is unchanged and still
+    // reachable from Settings -- none of these pages were removed, just the
+    // duplicate top-nav shortcuts to them.
     subtabs: [
-      { key: "applicationPathways", label: "Application Pathways", view: "applicationPathways" },
-      { key: "timeline", label: "Timeline", view: "applicationPathways", entry: { section: "timeline" } },
+      { key: "applicationPathways", label: "Application Timeline & Pathways", view: "applicationPathways" },
       { key: "essays", label: "Essays", view: "essays" },
       { key: "applications", label: "Applications Tracker", view: "applications" },
-      { key: "recommendations", label: "Recommendations", view: "applications" },
-      { key: "portalTracker", label: "Portal Tracker", view: "portalTracker" },
       { key: "financialAid", label: "Financial Aid", view: "financialAid" },
     ],
   },
