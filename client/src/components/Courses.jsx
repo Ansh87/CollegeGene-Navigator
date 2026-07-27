@@ -6,6 +6,11 @@ import { api } from "../lib/api.js";
 import { SourceBadge, Spinner, ErrorNote, RestoredNote, ClearSearchButton } from "./ui.jsx";
 import { usePersistedSearch } from "../lib/persistedSearch.js";
 
+// College Scorecard's school_url field comes back as a bare domain (e.g.
+// "web.mit.edu", no scheme), which the browser treats as a relative path if
+// used directly as an href -- same fix already used in CollegeDetail.jsx.
+function fixUrl(u) { return u ? (/^https?:/.test(u) ? u : `https://${u}`) : u; }
+
 export function Courses({ onOpen, studentId, profile, initialTrackId }) {
   const [tab, setTab] = useState(initialTrackId ? "track" : "college"); // "college" | "track"
   // If a new track id arrives from Advisor after mount (e.g. clicking a
@@ -173,7 +178,7 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
                   <div className="note" style={{ marginBottom: 10 }}>
                     This is the federal government's program taxonomy, not {selected.name}'s own department page — titles and groupings won't always match the college's own website.
                     {programs.officialWebsiteUrl && (
-                      <> <a className="link" href={programs.officialWebsiteUrl} target="_blank" rel="noreferrer">Compare with {selected.name}'s official site ↗</a></>
+                      <> <a className="link" href={fixUrl(programs.officialWebsiteUrl)} target="_blank" rel="noreferrer">Compare with {selected.name}'s official site ↗</a></>
                     )}
                   </div>
                   {Object.entries(grouped).map(([area, list]) => (
@@ -198,7 +203,7 @@ export function Courses({ onOpen, studentId, profile, initialTrackId }) {
                   <h3>From {selected.name}'s own website</h3><SourceBadge level="official">Live scan</SourceBadge>
                 </div>
                 <p className="note">
-                  A direct, on-demand scan of {programs.officialWebsiteUrl ? <a className="link" href={programs.officialWebsiteUrl} target="_blank" rel="noreferrer">{selected.name}'s official site</a> : "the college's official site"} for its own
+                  A direct, on-demand scan of {programs.officialWebsiteUrl ? <a className="link" href={fixUrl(programs.officialWebsiteUrl)} target="_blank" rel="noreferrer">{selected.name}'s official site</a> : "the college's official site"} for its own
                   department/major pages — a different lens than the federal list above. Not saved anywhere; run it fresh any time. Best-effort only, so treat gaps
                   or misses as "check the site directly," not "doesn't exist."
                 </p>
